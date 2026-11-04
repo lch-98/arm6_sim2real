@@ -1,0 +1,19 @@
+# colcon
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.pyc
+
+# 기록 (rosbag은 크기 때문에 저장소에 넣지 않음)
+*.db3
+*.mcap
+arm_logs/
+**/analysis/*.csv
+
+# 편집기
+.vscode/
+.idea/
+*.swp

@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<!--
+  ros2_control 하드웨어 정의
+
+  sim_mode:
+    mock   : mock_components/GenericSystem — 명령값을 그대로 상태로 돌려주는 가짜 하드웨어.
+             동역학 없음. 컨트롤러 설정·궤적 파이프라인 확인용
+    gazebo : gz_ros2_control/GazeboSimSystem — Gazebo(Fortress) 물리 시뮬레이션.
+             중력·관성·감쇠가 들어가고, effort 상태로 관절 토크를 읽을 수 있음
+  (실물 단계에서는 여기에 Damiao 하드웨어 인터페이스가 추가된다)
+
+  명령 인터페이스: 6축 + 그리퍼 모두 position
+    → 실물 Damiao 모터의 위치 제어(내부 위치 루프)와 같은 구조로 맞춤
+  상태 인터페이스: position, velocity, effort
+
+  그리퍼: finger_left_joint, finger_right_joint 둘 다 같은 값으로 명령 (실물은 모터 1개가 랙·피니언으로 두 핑거를 구동)
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="arm_joint_if" params="name lower upper initial cmd:=position">
+    <joint name="${name}">
+      <command_interface name="${cmd}">
+        <xacro:if value="${cmd == 'position'}">
+          <param name="min">${lower}</param>
+          <param name="max">${upper}</param>
+        </xacro:if>
+      </command_interface>
+      <state_interface name="position">
+        <param name="initial_value">${initial}</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="effort"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="arm_ros2_control" params="prefix sim_mode stage initial_j2:=0.0 initial_j3:=0.0">
+    <ros2_control name="${prefix}arm_system" type="system">
+      <hardware>
+        <xacro:if value="${sim_mode == 'mock'}">
+          <plugin>mock_components/GenericSystem</plugin>
+          <param name="calculate_dynamics">true</param>
+        </xacro:if>
+        <xacro:if value="${sim_mode == 'gazebo'}">
+          <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+          <!-- 위치 제어 게인(position_proportional_gain)은 arm_bringup/config/controllers_gazebo_overrides.yaml 에서 설정 -->
+        </xacro:if>
+      </hardware>
+
+      <xacro:arm_joint_if name="${prefix}joint1" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0"/>
+      <xacro:arm_joint_if name="${prefix}joint2" lower="${-110*PI/180}" upper="${110*PI/180}" initial="${initial_j2}"/>
+      <xacro:arm_joint_if name="${prefix}joint3" lower="${-150*PI/180}" upper="${60*PI/180}" initial="${initial_j3}"/>
+
+      <xacro:if value="${stage == 'full'}">
+        <xacro:arm_joint_if name="${prefix}joint4" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0"/>
+        <xacro:arm_joint_if name="${prefix}joint5" lower="${-110*PI/180}" upper="${110*PI/180}" initial="0.0"/>
+        <xacro:arm_joint_if name="${prefix}joint6" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0"/>
+        <!-- 두 핑거를 모두 일반 관절로 노출하고, 그리퍼 컨트롤러가 두 핑거에 같은 목표를 보낸다.
+             (실물 하드웨어 인터페이스는 두 명령을 모터 1개로 합친다)
+             Gazebo에서는 핑거를 effort(힘)로 구동하고 PD 제어는 그리퍼 컨트롤러가 맡는다.
+             이 Gazebo 버전에서 오른쪽 핑거 관절이 속도 명령에 반응하지 않아서이며, 힘 명령은 정상 동작한다.
+             (원인: 미확인. 독립 Gazebo 월드에서는 같은 관절이 속도 명령으로 움직임) -->
+        <xacro:property name="finger_cmd" value="${'effort' if sim_mode == 'gazebo' else 'position'}"/>
+        <xacro:arm_joint_if name="${prefix}finger_left_joint" lower="0.0" upper="${arm_finger_stroke}" initial="0.0" cmd="${finger_cmd}"/>
+        <xacro:arm_joint_if name="${prefix}finger_right_joint" lower="0.0" upper="${arm_finger_stroke}" initial="0.0" cmd="${finger_cmd}"/>
+      </xacro:if>
+    </ros2_control>
+  </xacro:macro>
+
+  <!-- Gazebo 플러그인: controller_manager를 Gazebo 안에서 띄움 -->
+  <xacro:macro name="arm_gazebo" params="controllers_file gazebo_overrides_file">
+    <gazebo>
+      <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>${controllers_file}</parameters>
+        <!-- Gazebo에서만 다른 설정(그리퍼 effort + PD 게인)을 덮어씀 -->
+        <parameters>${gazebo_overrides_file}</parameters>
+      </plugin>
+    </gazebo>
+  </xacro:macro>
+
+</robot>

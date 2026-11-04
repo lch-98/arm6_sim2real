@@ -1,0 +1,27 @@
+# 프린팅 부품 목록 (generate_cad.py 자동 생성)
+# 파일명                                   재질      솔리드 부피[cm^3]
+base_link.stl                              PLA/PETG     176.4
+base_link__base_band.stl                   PLA/PETG       6.2
+link1.stl                                  PLA/PETG     161.5
+link1__j2_bearing_cap.stl                  PLA/PETG       3.4
+link2.stl                                  PLA/PETG     197.4
+link2__j2_adapter.stl                      PLA/PETG       7.3
+link2__j2_pin.stl                          PLA/PETG       7.1
+link2__j3_bearing_cap.stl                  PLA/PETG       2.1
+link3.stl                                  PLA/PETG     120.4
+link3__j3_adapter.stl                      PLA/PETG       5.5
+link3__j3_pin.stl                          PLA/PETG       3.6
+link3__j4_retainer_ring.stl                PLA/PETG       3.1
+link4.stl                                  PLA/PETG     163.8
+link4__j5_bearing_cap.stl                  PLA/PETG       2.1
+link5.stl                                  PLA/PETG      75.7
+link5__j5_adapter.stl                      PLA/PETG       5.5
+link5__j5_pin.stl                          PLA/PETG       3.6
+link5__j6_retainer_ring.stl                PLA/PETG       1.8
+link6.stl                                  PLA/PETG      52.5
+finger_left.stl                            PLA/PETG      10.4
+finger_left__pad_TPU.stl                   TPU            0.3
+finger_right.stl                           PLA/PETG      10.4
+finger_right__pad_TPU.stl                  TPU            0.3
+camera__bracket.stl                        PLA/PETG      22.3
+camera__clamp.stl                          PLA/PETG       3.5

@@ -1,0 +1,229 @@
+<?xml version="1.0"?>
+<!--
+  arm : 6축 관절형 매니퓰레이터 + 평행 그리퍼
+  J1 베이스 요(z) / J2 어깨 피치(y) / J3 팔꿈치 피치(y)
+  J4 전완 롤(x) / J5 손목 피치(y) / J6 손목 롤(x) / 그리퍼 프리즘 2개(mimic)
+
+  사용 예:
+    <xacro:include filename="$(find arm_description)/urdf/arm_macro.xacro"/>
+    <xacro:arm prefix="" parent="world">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:arm>
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find arm_description)/urdf/generated/arm_properties.xacro"/>
+
+  <xacro:property name="PI" value="3.14159265358979"/>
+  <xacro:property name="mesh_dir" value="package://arm_description/meshes"/>
+
+  <!--
+    액추에이터별 effort[N·m] / velocity[rad/s]: 판매처 사양표의 정격 토크·정격 속도(24 V).
+    판매처마다 값이 다르게 적힌 경우 낮은 쪽을 사용. 실제 납품 제품 사양서로 재확인할 것.
+      DM-J4340-2EC :  9 N·m,  36 rpm
+      DM-J4310-2EC :  3 N·m, 120 rpm
+      DM-H3510     : 0.18 N·m, 500 rpm (직결)
+  -->
+  <xacro:property name="eff_4340" value="9.0"/>
+  <xacro:property name="vel_4340" value="${36*2*PI/60}"/>
+  <xacro:property name="eff_4310" value="3.0"/>
+  <xacro:property name="vel_4310" value="${120*2*PI/60}"/>
+  <xacro:property name="eff_3510" value="0.18"/>
+  <xacro:property name="vel_3510" value="${500*2*PI/60}"/>
+
+  <!-- 링크 1개 = 프린팅 본체(흰색) + 액센트(주황) [+ 액추에이터 외형(회색)] -->
+  <xacro:macro name="arm_link" params="prefix name motor:=true">
+    <link name="${prefix}${name}">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><mesh filename="${mesh_dir}/${name}_body.stl" scale="0.001 0.001 0.001"/></geometry>
+        <material name="${prefix}arm_body"/>
+      </visual>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><mesh filename="${mesh_dir}/${name}_accent.stl" scale="0.001 0.001 0.001"/></geometry>
+        <material name="${prefix}arm_accent"/>
+      </visual>
+      <xacro:if value="${motor}">
+        <visual>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry><mesh filename="${mesh_dir}/${name}_motor.stl" scale="0.001 0.001 0.001"/></geometry>
+          <material name="${prefix}arm_motor"/>
+        </visual>
+      </xacro:if>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><mesh filename="${mesh_dir}/${name}_collision.stl" scale="0.001 0.001 0.001"/></geometry>
+      </collision>
+      <xacro:call macro="inertial_${name}"/>
+    </link>
+  </xacro:macro>
+
+  <xacro:macro name="rev_joint" params="prefix name parent child xyz axis lower upper eff vel">
+    <joint name="${prefix}${name}" type="revolute">
+      <parent link="${prefix}${parent}"/>
+      <child link="${prefix}${child}"/>
+      <origin xyz="${xyz}" rpy="0 0 0"/>
+      <axis xyz="${axis}"/>
+      <limit lower="${lower}" upper="${upper}" effort="${eff}" velocity="${vel}"/>
+      <dynamics damping="0.1" friction="0.0"/>
+    </joint>
+  </xacro:macro>
+
+  <!--
+    stage:     full  = 전체 팔
+               j1to3 = J1~J3 서브 어셈블리 (link3까지). link3 질량에는 J4 액추에이터 몫이 들어 있으므로
+                       실물에서는 J4 캔에 같은 질량(DM-J4310 ≈ 0.300 kg)의 더미 추를 넣어 맞춘다.
+    test_mass: j1to3 단계에서 J4 출력면 위치에 다는 시험 추 [kg] (0이면 없음)
+    camera:    d435 = 그리퍼 위에 RealSense D435 + 프린팅 마운트, none = 카메라 없음
+    finger_mimic: true = 오른쪽 핑거를 URDF mimic으로 연결 (RViz 슬라이더용), false = ros2_control 사용 시
+  -->
+  <xacro:macro name="arm" params="prefix:='' parent *origin stage:='full' test_mass:=0.0 camera:='d435' finger_mimic:=true">
+
+    <material name="${prefix}arm_body"><color rgba="0.90 0.90 0.88 1.0"/></material>
+    <material name="${prefix}arm_accent"><color rgba="0.95 0.45 0.10 1.0"/></material>
+    <material name="${prefix}arm_motor"><color rgba="0.25 0.26 0.28 1.0"/></material>
+
+    <!-- 장착부 -->
+    <joint name="${prefix}mount_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="${prefix}base_link"/>
+      <xacro:insert_block name="origin"/>
+    </joint>
+
+    <xacro:arm_link prefix="${prefix}" name="base_link"/>
+    <xacro:arm_link prefix="${prefix}" name="link1"/>
+    <xacro:arm_link prefix="${prefix}" name="link2"/>
+    <xacro:arm_link prefix="${prefix}" name="link3"/>
+    <xacro:if value="${stage == 'full'}">
+    <xacro:arm_link prefix="${prefix}" name="link4"/>
+    <xacro:arm_link prefix="${prefix}" name="link5"/>
+    <xacro:arm_link prefix="${prefix}" name="link6"/>
+    <xacro:arm_link prefix="${prefix}" name="finger_left" motor="false"/>
+    <xacro:arm_link prefix="${prefix}" name="finger_right" motor="false"/>
+    </xacro:if>
+
+    <!-- 홈 자세(전 관절 0): 상완은 수직, 전완~그리퍼는 +x 방향 수평 (ㄱ자) -->
+    <xacro:rev_joint prefix="${prefix}" name="joint1" parent="base_link" child="link1"
+                     xyz="0 0 ${arm_base_h}" axis="0 0 1" lower="${-170*PI/180}" upper="${170*PI/180}" eff="${eff_4310}" vel="${vel_4310}"/>
+    <xacro:rev_joint prefix="${prefix}" name="joint2" parent="link1" child="link2"
+                     xyz="0 0 ${arm_j2_z}" axis="0 1 0" lower="${-110*PI/180}" upper="${110*PI/180}" eff="${eff_4340}" vel="${vel_4340}"/>
+    <!-- +방향 = 전완이 아래로 접힘. 전완 J4 캔이 상완 요크에 닿기 직전에서 여유를 두고 +60°로 제한 -->
+    <xacro:rev_joint prefix="${prefix}" name="joint3" parent="link2" child="link3"
+                     xyz="0 0 ${arm_L2}" axis="0 1 0" lower="${-150*PI/180}" upper="${60*PI/180}" eff="${eff_4340}" vel="${vel_4340}"/>
+    <xacro:if value="${stage == 'full'}">
+    <xacro:rev_joint prefix="${prefix}" name="joint4" parent="link3" child="link4"
+                     xyz="${arm_L3} 0 0" axis="1 0 0" lower="${-170*PI/180}" upper="${170*PI/180}" eff="${eff_4310}" vel="${vel_4310}"/>
+    <xacro:rev_joint prefix="${prefix}" name="joint5" parent="link4" child="link5"
+                     xyz="${arm_L4} 0 0" axis="0 1 0" lower="${-110*PI/180}" upper="${110*PI/180}" eff="${eff_4310}" vel="${vel_4310}"/>
+    <xacro:rev_joint prefix="${prefix}" name="joint6" parent="link5" child="link6"
+                     xyz="${arm_L5} 0 0" axis="1 0 0" lower="${-170*PI/180}" upper="${170*PI/180}" eff="${eff_3510}" vel="${vel_3510}"/>
+
+    <!-- 그리퍼: 랙·피니언(피치원 반경 10 mm)으로 두 핑거가 대칭 이동. 왼쪽만 독립, 오른쪽은 mimic
+         effort: H3510 정격 0.18 N·m / 0.01 m = 18 N 에서 여유를 둔 값 -->
+    <joint name="${prefix}finger_left_joint" type="prismatic">
+      <parent link="${prefix}link6"/>
+      <child link="${prefix}finger_left"/>
+      <origin xyz="${arm_grip_len} 0 0" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="0.0" upper="${arm_finger_stroke}" effort="15.0" velocity="0.1"/>
+    </joint>
+    <joint name="${prefix}finger_right_joint" type="prismatic">
+      <parent link="${prefix}link6"/>
+      <child link="${prefix}finger_right"/>
+      <origin xyz="${arm_grip_len} 0 0" rpy="0 0 0"/>
+      <axis xyz="0 -1 0"/>
+      <limit lower="0.0" upper="${arm_finger_stroke}" effort="15.0" velocity="0.1"/>
+      <!-- RViz 표시 모드(슬라이더)에서만 mimic 사용. ros2_control 모드에서는 컨트롤러가 두 핑거에 같은 값을 보냄 -->
+      <xacro:if value="${finger_mimic}">
+        <mimic joint="${prefix}finger_left_joint" multiplier="1.0" offset="0.0"/>
+      </xacro:if>
+    </joint>
+
+    <!-- 툴 프레임: tool0 = 손목 플랜지, tcp = 핑거 끝에서 10 mm 안쪽 -->
+    <link name="${prefix}tool0"/>
+    <joint name="${prefix}tool0_joint" type="fixed">
+      <parent link="${prefix}link6"/>
+      <child link="${prefix}tool0"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+    <link name="${prefix}tcp"/>
+    <joint name="${prefix}tcp_joint" type="fixed">
+      <parent link="${prefix}link6"/>
+      <child link="${prefix}tcp"/>
+      <origin xyz="${arm_grip_len + arm_finger_len - 0.010} 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <!-- 손목 카메라: RealSense D435 + 프린팅 마운트 (link6과 함께 J6로 회전) -->
+    <xacro:if value="${camera == 'd435'}">
+      <link name="${prefix}camera_mount">
+        <visual>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry><mesh filename="${mesh_dir}/camera_mount_body.stl" scale="0.001 0.001 0.001"/></geometry>
+          <material name="${prefix}arm_accent"/>
+        </visual>
+        <collision>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry><mesh filename="${mesh_dir}/camera_mount_body.stl" scale="0.001 0.001 0.001"/></geometry>
+        </collision>
+        <xacro:call macro="inertial_camera_mount"/>
+      </link>
+      <joint name="${prefix}camera_mount_joint" type="fixed">
+        <parent link="${prefix}link6"/>
+        <child link="${prefix}camera_mount"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </joint>
+
+      <!-- camera_link: 카메라 본체 중심, x = 렌즈 방향 (RealSense 드라이버의 camera_link와 같은 이름) -->
+      <link name="${prefix}camera_link">
+        <visual>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry><mesh filename="${mesh_dir}/camera_d435_body.stl" scale="0.001 0.001 0.001"/></geometry>
+          <material name="${prefix}arm_motor"/>
+        </visual>
+        <collision>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <geometry><box size="${arm_cam_d} ${arm_cam_w} ${arm_cam_h}"/></geometry>
+        </collision>
+        <xacro:call macro="inertial_camera_d435"/>
+      </link>
+      <joint name="${prefix}camera_joint" type="fixed">
+        <parent link="${prefix}camera_mount"/>
+        <child link="${prefix}camera_link"/>
+        <origin xyz="${arm_cam_x} 0 ${arm_cam_z}" rpy="0 ${arm_cam_pitch} 0"/>
+      </joint>
+
+      <!-- 공칭 광학 프레임 (z = 시선 방향, x = 오른쪽, y = 아래). 실제 센서 위치는 드라이버가 내보내는 TF를 사용 -->
+      <link name="${prefix}camera_optical_nominal"/>
+      <joint name="${prefix}camera_optical_nominal_joint" type="fixed">
+        <parent link="${prefix}camera_link"/>
+        <child link="${prefix}camera_optical_nominal"/>
+        <origin xyz="${arm_cam_d/2} 0 0" rpy="${-PI/2} 0 ${-PI/2}"/>
+      </joint>
+    </xacro:if>
+
+    </xacro:if>
+
+    <!-- J1~J3 단계: J4 출력면 위치에 시험 추 (40 mm 정육면체로 표시) -->
+    <xacro:if value="${stage == 'j1to3' and test_mass > 0.0}">
+      <link name="${prefix}test_mass">
+        <visual>
+          <origin xyz="0.020 0 0" rpy="0 0 0"/>
+          <geometry><box size="0.04 0.04 0.04"/></geometry>
+          <material name="${prefix}arm_motor"/>
+        </visual>
+        <inertial>
+          <origin xyz="0.020 0 0" rpy="0 0 0"/>
+          <mass value="${test_mass}"/>
+          <inertia ixx="${test_mass*0.04*0.04/6}" ixy="0" ixz="0" iyy="${test_mass*0.04*0.04/6}" iyz="0" izz="${test_mass*0.04*0.04/6}"/>
+        </inertial>
+      </link>
+      <joint name="${prefix}test_mass_joint" type="fixed">
+        <parent link="${prefix}link3"/>
+        <child link="${prefix}test_mass"/>
+        <origin xyz="${arm_L3} 0 0" rpy="0 0 0"/>
+      </joint>
+    </xacro:if>
+
+  </xacro:macro>
+</robot>

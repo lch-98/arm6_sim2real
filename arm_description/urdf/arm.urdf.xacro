@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<!--
+  단독 실행용 최상위 파일: 바닥(world)에 팔을 고정
+    xacro arm.urdf.xacro                                  → 전체 팔 (RViz 표시용, ros2_control 없음)
+    xacro arm.urdf.xacro stage:=j1to3 test_mass:=0.2      → J1~J3 서브 어셈블리 + 시험 추
+    xacro arm.urdf.xacro camera:=none                     → 손목 카메라 없이
+    xacro arm.urdf.xacro sim_mode:=mock                   → ros2_control mock 하드웨어 포함
+    xacro arm.urdf.xacro sim_mode:=gazebo controllers_file:=<yaml> gazebo_overrides_file:=<yaml>   → Gazebo용
+-->
+<robot name="arm" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:arg name="prefix" default=""/>
+  <xacro:arg name="stage" default="full"/>
+  <xacro:arg name="test_mass" default="0.0"/>
+  <xacro:arg name="camera" default="d435"/>
+  <xacro:arg name="sim_mode" default="none"/>
+  <xacro:arg name="controllers_file" default=""/>
+  <xacro:arg name="gazebo_overrides_file" default=""/>
+
+  <xacro:include filename="$(find arm_description)/urdf/arm_macro.xacro"/>
+  <xacro:include filename="$(find arm_description)/urdf/arm.ros2_control.xacro"/>
+
+  <link name="world"/>
+
+  <xacro:arm prefix="$(arg prefix)" parent="world" stage="$(arg stage)" test_mass="$(arg test_mass)" camera="$(arg camera)"
+             finger_mimic="${'$(arg sim_mode)' == 'none'}">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </xacro:arm>
+
+  <xacro:if value="${'$(arg sim_mode)' != 'none'}">
+    <xacro:arm_ros2_control prefix="$(arg prefix)" sim_mode="$(arg sim_mode)" stage="$(arg stage)"/>
+  </xacro:if>
+  <xacro:if value="${'$(arg sim_mode)' == 'gazebo'}">
+    <xacro:arm_gazebo controllers_file="$(arg controllers_file)" gazebo_overrides_file="$(arg gazebo_overrides_file)"/>
+  </xacro:if>
+
+</robot>

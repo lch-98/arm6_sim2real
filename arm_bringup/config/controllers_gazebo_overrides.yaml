@@ -1,0 +1,20 @@
+# Gazebo 전용 덮어쓰기 (controllers.yaml 다음에 읽힘)
+
+# [참고] Gazebo 위치 루프: 속도 명령 = 게인(position_proportional_gain) x (목표 - 현재) x 200 Hz
+#   Humble용 gz_ros2_control 0.7.x는 이 게인을 설정 파일에서 읽기 전에 노드를 만들어서
+#   파일로 바꿀 수 없고 기본값 0.1이 쓰인다 → 속도 = 20 x 오차, 시정수 약 50 ms의 1차 지연.
+#   그래서 Gazebo의 추종 오차는 실물 모터(Damiao 위치 루프)보다 크게 나온다. 이 값은 시뮬레이터 특성으로 기록만 한다.
+
+#
+# Gazebo에서는 그리퍼 핑거를 effort(힘)로 구동하고 컨트롤러가 PD 제어를 한다.
+# 이 Gazebo(Fortress) + gz_ros2_control 조합에서 오른쪽 핑거 관절이 속도 명령에 움직이지 않는 현상이 있어
+# 힘 명령으로 우회한다. 팔 6축은 controllers.yaml 그대로(position).
+#
+# 게인 산정: 핑거 질량 약 6.6 g. p = 30 N/m → 1 mm 오차에 0.03 N
+#            d ≈ 2·sqrt(p·m) ≈ 0.9 → 0.6으로 약간 덜 감쇠 (200 Hz에서 안정 여유 확인)
+gripper_controller:
+  ros__parameters:
+    command_interfaces: [effort]
+    gains:
+      finger_left_joint:  {p: 30.0, i: 0.0, d: 0.6, i_clamp: 0.0}
+      finger_right_joint: {p: 30.0, i: 0.0, d: 0.6, i_clamp: 0.0}

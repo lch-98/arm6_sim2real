@@ -1,0 +1,45 @@
+# ros2_control 컨트롤러 설정 — 전체 팔 (stage:=full)
+# mock / Gazebo / (나중에) 실물 모두 이 파일을 공통으로 쓴다
+controller_manager:
+  ros__parameters:
+    update_rate: 200            # [Hz] 일반 CAN 1 Mbps에서 7축 명령+응답이 버스 부하 약 38%인 주기
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+    arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+    gripper_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+arm_controller:
+  ros__parameters:
+    joints: [joint1, joint2, joint3, joint4, joint5, joint6]
+    command_interfaces: [position]
+    state_interfaces: [position, velocity]
+    state_publish_rate: 100.0   # /arm_controller/state (목표·실제·오차) 발행 주기
+    action_monitor_rate: 20.0
+    allow_partial_joints_goal: false
+    open_loop_control: false
+    constraints:
+      stopped_velocity_tolerance: 0.05
+      goal_time: 2.0
+      # 궤적 중 허용 오차 (넘으면 궤적 중단) / 도착 허용 오차 [rad]
+      joint1: {trajectory: 0.3, goal: 0.03}
+      joint2: {trajectory: 0.3, goal: 0.03}
+      joint3: {trajectory: 0.3, goal: 0.03}
+      joint4: {trajectory: 0.3, goal: 0.03}
+      joint5: {trajectory: 0.3, goal: 0.03}
+      joint6: {trajectory: 0.3, goal: 0.03}
+
+gripper_controller:
+  ros__parameters:
+    joints: [finger_left_joint, finger_right_joint]   # 두 핑거에 항상 같은 값을 보낸다
+    command_interfaces: [position]
+    state_interfaces: [position, velocity]
+    state_publish_rate: 50.0
+    allow_partial_joints_goal: false
+    constraints:
+      stopped_velocity_tolerance: 0.01
+      goal_time: 1.0
+      finger_left_joint: {trajectory: 0.01, goal: 0.002}
+      finger_right_joint: {trajectory: 0.01, goal: 0.002}
