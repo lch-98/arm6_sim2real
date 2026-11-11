@@ -44,11 +44,12 @@ cd ~/arm_ws && colcon build && source install/setup.bash
 | `arm_description/print/` | 3D 프린터 (슬라이서) | **출력할 부품 1개 = 파일 1개**. 모터 없음. `parts_list.txt`에 재질·부피 |
 | `arm_description/meshes/` | URDF (RViz, Gazebo) | 링크마다 `_body`(흰색), `_accent`(주황: 캡·어댑터·핀·패드), `_motor`(회색: 액추에이터 외형, 표시용), `_collision`(셋을 합친 충돌 형상) |
 | `arm_description/cad/step/` | CAD 수정 | 출력 부품마다 STEP 1개 |
-| `arm_description/cad/arm_assembly.step` | CAD 확인 | 모터·카메라까지 조립된 홈 자세 전체 |
+| `arm_description/cad/arm_assembly.step` | CAD 확인 | 모터·베어링·카메라까지 조립된 홈 자세 전체 |
+| `arm_description/cad/arm_exploded.step` | 조립 순서 확인 | 같은 부품을 조립 방향으로 빼 놓은 분해도 (아래 4-1) |
 
 `print/link2.stl`과 `meshes/link2_body.stl`은 같은 형상이다. **프린팅에는 `print/`만 쓴다.**
 
-### 프린팅 부품 (25개)
+### 프린팅 부품 (27개)
 
 | 링크 | 본체 | 추가 부품 |
 |---|---|---|
@@ -58,7 +59,7 @@ cd ~/arm_ws && colcon build && source install/setup.bash
 | link3 | `link3.stl` (팔꿈치 허브 + J4 캔) | `j3_adapter`, `j3_pin`, `j4_retainer_ring` |
 | link4 | `link4.stl` (전완 + 손목 요크) | `j5_bearing_cap` |
 | link5 | `link5.stl` (손목 허브 + J6 캔) | `j5_adapter`, `j5_pin`, `j6_retainer_ring` |
-| link6 | `link6.stl` (그리퍼 바디) | — (피니언은 구매) |
+| link6 | `link6.stl` (그리퍼 바디: 모터 캔 + 카메라 패드) | `rack_guide` (랙 가이드판 + 바깥 벽. 그리퍼 모터를 캔에 넣은 뒤 앞에 체결), `rack_cover` (앞 덮개, 슬롯 2줄) — 피니언은 구매 |
 | 핑거 | `finger_left.stl`, `finger_right.stl` (랙 일체) | `pad_TPU` (TPU로 출력) |
 | 카메라 | `camera__bracket.stl`, `camera__clamp.stl` | — |
 
@@ -67,6 +68,29 @@ cd ~/arm_ws && colcon build && source install/setup.bash
 - 설치: Ubuntu 22.04 기본 저장소(`apt install freecad`)는 0.19로 오래되었으므로 공식 AppImage(파일 하나, 삭제도 파일만 지우면 됨) 또는 `sudo snap install freecad`를 쓴다
 - `cad/arm_assembly.step`을 열면 색이 들어간 조립 모습이 보인다. 부품 하나를 수정하려면 `cad/step/<부품>.step`을 연다
 - STL만 빠르게 보려면 `sudo apt install f3d` 후 `f3d arm_description/print/link2.stl`
+
+### 4-1. 분해도 (`cad/arm_exploded.step`)
+
+부품을 **끼워 넣는 방향으로** 빼 놓은 상태다. 링크에서 가까운 부품부터 차례로 조립한다.
+
+| 관절 | 링크 쪽 → 바깥쪽 순서 |
+|---|---|
+| J1 (베이스) | 베이스 기둥 → J1 모터(위에서 넣음) → 상단 띠 → link1 |
+| J2, J3, J5 (피치) | −y쪽: 허브 → 어댑터 → 모터 / +y쪽: 베어링 → 핀 → 베어링 캡 |
+| J4, J6 (롤) | 캔 → 모터(앞에서 넣음) → 고정 링 → 다음 링크 |
+| 그리퍼 | 캔 → 그리퍼 모터 → 랙 가이드판 → 피니언 → 앞 덮개 → 핑거(옆 ±y에서 밀어 넣음) |
+
+- FreeCAD 왼쪽 트리에 부품 이름이 `링크__부품` 형식으로 나온다 (예: `link4__motor`, `link2__j3_bearing_cap`). 이름을 눌러 하나씩 숨기며(Space) 보면 체결 부위가 잘 보인다
+- 베어링(은색)은 표시용이다. 질량·URDF에는 넣지 않았다
+- 피니언(`link6__pinion_m1_20t`)은 구매품과 같은 치형(모듈 1, 20T, 압력각 20°, 인벌류트)으로 그렸다. 랙과 물린 모습을 확인하는 용도
+
+### 4-2. 이웃한 링크 간섭 검사 (`cad/check_clearance.py`)
+
+URDF 충돌 검사(MoveIt 등)는 관절로 바로 이어진 두 링크를 검사하지 않는다. 요크 안에서 도는 허브나 모터 캔처럼 붙어 있는 링크끼리의 간섭은 이 스크립트로 본다. 치수를 바꿨으면 `generate_cad.py` 다음에 실행한다.
+
+```bash
+python3 cad/check_clearance.py     # 약 1분. 관절마다 "간섭 없음"이 나와야 함
+```
 
 ## 5. 출력할 때 주의할 점
 

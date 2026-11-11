@@ -20,9 +20,9 @@
   <!--
     액추에이터별 effort[N·m] / velocity[rad/s]: 판매처 사양표의 정격 토크·정격 속도(24 V).
     판매처마다 값이 다르게 적힌 경우 낮은 쪽을 사용. 실제 납품 제품 사양서로 재확인할 것.
-      DM-J4340-2EC :  9 N·m,  36 rpm
-      DM-J4310-2EC :  3 N·m, 120 rpm
-      DM-H3510     : 0.18 N·m, 500 rpm (직결)
+      DM-J4340P-2EC :  9 N·m,  36 rpm (판매처에 따라 정격 12 N·m 표기)   → J1, J2, J3
+      DM-J4310-2EC  :  3 N·m, 120 rpm                                    → J4, J5, J6
+      DM-H3510      : 0.18 N·m, 500 rpm (직결)                            → 그리퍼
   -->
   <xacro:property name="eff_4340" value="9.0"/>
   <xacro:property name="vel_4340" value="${36*2*PI/60}"/>
@@ -105,19 +105,19 @@
 
     <!-- 홈 자세(전 관절 0): 상완은 수직, 전완~그리퍼는 +x 방향 수평 (ㄱ자) -->
     <xacro:rev_joint prefix="${prefix}" name="joint1" parent="base_link" child="link1"
-                     xyz="0 0 ${arm_base_h}" axis="0 0 1" lower="${-170*PI/180}" upper="${170*PI/180}" eff="${eff_4310}" vel="${vel_4310}"/>
+                     xyz="0 0 ${arm_base_h}" axis="0 0 1" lower="${-170*PI/180}" upper="${170*PI/180}" eff="${eff_4340}" vel="${vel_4340}"/>
     <xacro:rev_joint prefix="${prefix}" name="joint2" parent="link1" child="link2"
                      xyz="0 0 ${arm_j2_z}" axis="0 1 0" lower="${-110*PI/180}" upper="${110*PI/180}" eff="${eff_4340}" vel="${vel_4340}"/>
-    <!-- +방향 = 전완이 아래로 접힘. 전완 J4 캔이 상완 요크에 닿기 직전에서 여유를 두고 +60°로 제한 -->
+    <!-- +방향 = 전완이 아래로 접힘. +38°에서 전완 J4 캔이 상완 빔에 닿음 → 여유를 두고 +32°로 제한 -->
     <xacro:rev_joint prefix="${prefix}" name="joint3" parent="link2" child="link3"
-                     xyz="0 0 ${arm_L2}" axis="0 1 0" lower="${-150*PI/180}" upper="${60*PI/180}" eff="${eff_4340}" vel="${vel_4340}"/>
+                     xyz="0 0 ${arm_L2}" axis="0 1 0" lower="${-150*PI/180}" upper="${32*PI/180}" eff="${eff_4340}" vel="${vel_4340}"/>
     <xacro:if value="${stage == 'full'}">
     <xacro:rev_joint prefix="${prefix}" name="joint4" parent="link3" child="link4"
                      xyz="${arm_L3} 0 0" axis="1 0 0" lower="${-170*PI/180}" upper="${170*PI/180}" eff="${eff_4310}" vel="${vel_4310}"/>
     <xacro:rev_joint prefix="${prefix}" name="joint5" parent="link4" child="link5"
                      xyz="${arm_L4} 0 0" axis="0 1 0" lower="${-110*PI/180}" upper="${110*PI/180}" eff="${eff_4310}" vel="${vel_4310}"/>
     <xacro:rev_joint prefix="${prefix}" name="joint6" parent="link5" child="link6"
-                     xyz="${arm_L5} 0 0" axis="1 0 0" lower="${-170*PI/180}" upper="${170*PI/180}" eff="${eff_3510}" vel="${vel_3510}"/>
+                     xyz="${arm_L5} 0 0" axis="1 0 0" lower="${-170*PI/180}" upper="${170*PI/180}" eff="${eff_4310}" vel="${vel_4310}"/>
 
     <!-- 그리퍼: 랙·피니언(피치원 반경 10 mm)으로 두 핑거가 대칭 이동. 왼쪽만 독립, 오른쪽은 mimic
          effort: H3510 정격 0.18 N·m / 0.01 m = 18 N 에서 여유를 둔 값 -->

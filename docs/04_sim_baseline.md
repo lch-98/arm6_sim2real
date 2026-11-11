@@ -81,12 +81,12 @@ ros2 topic hz /joint_states       # average rate: 약 200
 
 ## 3. 기준 궤적 세트
 
-`arm_bringup/config/reference_trajectories.yaml` (version 1). **이 파일은 고정한다.** 바꾸면 이전 기록과 비교할 수 없으므로, 바꿀 때는 `version`을 올리고 기록을 새로 만든다.
+`arm_bringup/config/reference_trajectories.yaml` (version 2). **이 파일은 고정한다.** 바꾸면 이전 기록과 비교할 수 없으므로, 바꿀 때는 `version`을 올리고 기록을 새로 만든다.
 
 | 세트 | 내용 | 목적 |
 |---|---|---|
 | `home` | 홈 자세로 이동 | 시작·끝 정렬 |
-| `sweeps` | ready 자세에서 한 관절씩 사인파로 흔들기 (6개). 최고 속도는 각 모터 정격 속도의 15% 이하 | 관절별 추종 특성 (지연, 마찰) |
+| `sweeps` | ready 자세에서 한 관절씩 사인파로 흔들기 (6개). 최고 속도는 각 모터 정격 속도의 25% 이하 | 관절별 추종 특성 (지연, 마찰) |
 | `static` | 정지 자세 12개에서 3초씩 멈추기 | 중력 토크 → 질량·무게중심 식별 |
 | `pick` | A 지점에서 집어 B 지점에 놓기 (그리퍼 아래 방향) | 실제 작업에 가까운 동작 |
 
@@ -123,7 +123,7 @@ ros2 run arm_bringup analyze_baseline.py ~/arm_logs/mock_baseline
 mock에서 기대되는 결과 ([결과 예시](results/00_sim_baseline/mock_summary.md)):
 - 추종 오차는 수 mrad 이하 (컨트롤러 보간 오차뿐)
 - 정지 자세 토크는 `측정 토크가 모두 0 → ... 토크 비교는 생략` (mock은 토크를 계산하지 않음)
-- 모델 유지 토크 열은 채워진다. 예: 홈 자세(static/06)에서 J2·J3 약 −2.30 N·m
+- 모델 유지 토크 열은 채워진다. 예: 홈 자세(static/06)에서 J2·J3 약 −3.02 N·m
 
 ## 5. Gazebo로 실행
 
@@ -142,7 +142,7 @@ Gazebo 창에 팔이 홈 자세로 서 있고, 중력에도 처지지 않으면 
 ros2 topic echo --once /joint_states
 ```
 
-`effort`에서 joint2·joint3가 약 −2.30, joint4 약 −0.14, joint5 약 −0.30 이면 URDF 질량대로 중력이 걸리고 있는 것이다.
+`effort`에서 joint2·joint3가 약 −3.02, joint4 약 −0.14, joint5 약 −0.55 이면 URDF 질량대로 중력이 걸리고 있는 것이다.
 
 ### Gazebo에서만 다른 점 두 가지
 
@@ -162,13 +162,17 @@ PC가 느리면 Gazebo가 실시간보다 느리게 돌아 실제 시간이 더 
 
 ## 7. 결과와 해석
 
-결과 요약: [Gazebo](results/00_sim_baseline/gazebo_summary.md), [mock](results/00_sim_baseline/mock_summary.md) (Ubuntu 22.04 + apt 설치 ROS 2 Humble 실기 PC에서 측정. 검증 환경 결과와 소수 셋째 자리까지 일치)
+결과 요약: [Gazebo](results/00_sim_baseline/gazebo_summary.md), [mock](results/00_sim_baseline/mock_summary.md) (Ubuntu 22.04 + apt 설치 ROS 2 Humble 실기 PC에서 측정)
+
+- 2026-11-11 재기록: 키트 모터 구성(J1~J3 4340P, J4~J6 4310, 그리퍼 H3510), 손목 L5 95 mm, 그리퍼 랙 안내 구조, 기준 궤적 **version 2**
+- 이전 기록(2026-11-04, 이전 모터 구성·version 1)은 이 기록으로 교체했다. 이후 단계는 이 기록과 비교한다
+- 액추에이터 질량·형상을 바꾸면(예: 모터 실측 질량 반영) 모델 유지 토크가 달라지므로 기준선을 다시 기록한다
 
 ### 7-1. 정지 자세 토크: 측정 vs 모델
 
 ![정지 자세 토크](results/00_sim_baseline/gazebo_static_torque.png)
 
-12개 자세 × 3관절에서 **측정 − 모델: 평균 +0.001, RMS 0.002, 최대 0.004 N·m**.
+12개 자세 × 3관절에서 **측정 − 모델: 평균 +0.002, RMS 0.002, 최대 0.005 N·m**. 홈 자세(static/06) J2·J3 −3.005 / 모델 −3.008 N·m.
 
 - 의미: 기록 → 분석 → 중력 모델 계산까지의 사슬이 맞게 동작한다는 확인이다
 - Gazebo와 모델이 **같은 URDF**를 쓰므로 이 일치가 "URDF 질량이 실물과 맞다"는 뜻은 아니다. 실물과의 비교는 J1~J3 단계(로드맵 3단계)에서 같은 표로 한다. 그때 차이가 곧 질량·무게중심 보정량이 된다
@@ -186,12 +190,12 @@ PC가 느리면 Gazebo가 실시간보다 느리게 돌아 실제 시간이 더 
 | joint5 | 0.94 | 47 | 47.0 |
 | joint6 | 1.88 | 94 | 94.0 |
 
-측정값이 5절의 1차 지연 모델과 정확히 맞는다. 즉 Gazebo의 추종 오차는 시뮬레이터 위치 루프 때문이고, 다른 문제(관절 걸림, 컨트롤러 설정 오류)는 없다는 뜻이다.
+측정값이 5절의 1차 지연 모델과 정확히 맞는다. mock의 최대 오차(예: joint1 4.6 mrad)는 200 Hz 한 주기 동안 움직이는 양(0.84 rad/s × 5 ms ≈ 4.2 mrad) 정도의 보간 오차다. 즉 Gazebo의 추종 오차는 시뮬레이터 위치 루프 때문이고, 다른 문제(관절 걸림, 컨트롤러 설정 오류)는 없다는 뜻이다.
 실물 단계에서는 같은 표에 실물 측정값이 들어가고, 그 차이로 모터 위치 루프를 모델링한다.
 
 ## 8. 기록 보관 규칙
 
-- 폴더 이름: `~/arm_logs/<날짜>_<환경>_<설명>` 예: `2026-11-04_gazebo_baseline_v1`
+- 폴더 이름: `~/arm_logs/<날짜>_<환경>_<설명>` 예: `2026-11-11_gazebo_baseline_v2`
 - 기준선 bag은 지우지 않는다. 이후 모든 단계의 비교 대상이다
 - `summary.md`와 그래프는 `docs/results/<단계>/`에 복사해 저장소에 남긴다 (bag 원본은 크므로 저장소에 넣지 않음)
 
@@ -222,13 +226,15 @@ echo $AMENT_PREFIX_PATH | tr ':' '\n'      # 남은 경로 확인: /opt/ros/humb
 
 ## 10. 체크리스트
 
-- [ ] mock: 컨트롤러 3개 active, `/joint_states` 200 Hz
-- [ ] mock: `run_reference.py --set all` 완료, `analyze_baseline.py` 요약 생성
-- [ ] Gazebo: 홈 자세에서 처지지 않음, joint2 effort 약 −2.30 N·m
-- [ ] Gazebo: `--sim-time`으로 전체 세트 완료, 정지 자세 토크가 모델과 일치
-- [ ] 기준선 bag 두 개(`mock_baseline`, `gazebo_baseline`) 보관, 요약을 `docs/results/`에 복사
+완료: 2026-11-11 (현재 모델, 기준 궤적 version 2)
 
-다음 단계: 모터 단품 벤치 (로드맵 1단계) — 4340 1개, 4310 1개로 CAN 설정, 모터 특성 측정, 1축 하드웨어 인터페이스.
+- [x] mock: 컨트롤러 3개 active, `/joint_states` 200 Hz
+- [x] mock: `run_reference.py --set all` 완료, `analyze_baseline.py` 요약 생성
+- [x] Gazebo: 홈 자세에서 처지지 않음, joint2 effort 약 −3.02 N·m
+- [x] Gazebo: `--sim-time`으로 전체 세트 완료, 정지 자세 토크가 모델과 일치
+- [x] 기준선 bag 두 개(`mock_baseline`, `gazebo_baseline`) 보관, 요약을 `docs/results/`에 복사
+
+다음 단계: 모터 단품 벤치 (로드맵 1단계) — 4340P 1개, 4310 1개로 CAN 설정, 모터 특성 측정, 1축 하드웨어 인터페이스.
 
 ## 부록: 검증 환경
 
@@ -296,8 +302,8 @@ ros2_control은 **"무엇을 할지(컨트롤러)"와 "실제로 움직이는 �
   3. 그 모멘트를 관절 축 방향 성분만 더함 → 중력이 관절을 돌리려는 토크
   4. 부호를 뒤집음 → 그 자세를 버티려고 모터가 내야 하는 토크
 
-예: 홈 자세 joint3. J3보다 끝 쪽 질량 합 1.210 kg, 무게중심이 J3에서 수평으로 193.8 mm 앞.
-1.210 kg × 9.81 m/s² × 0.1938 m = **2.301 N·m** → 표의 모델값 −2.301 (부호는 축 방향 기준)
+예: 홈 자세 joint3. J3보다 끝 쪽 질량 합 1.440 kg, 무게중심이 J3에서 수평으로 214.0 mm 앞.
+1.440 kg × 9.81 m/s² × 0.2140 m = **3.023 N·m** → 표의 모델값 −3.019 (질량·거리 반올림 차이) (부호는 축 방향 기준)
 
 - **측정 − 모델**: 12자세 × 3관절(J2, J3, J5) 차이의 평균·RMS·최대
   - Gazebo에서 거의 0인 것은 기록·분석 과정이 맞다는 뜻 (둘 다 같은 URDF)

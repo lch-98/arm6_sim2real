@@ -48,7 +48,7 @@
 
       <xacro:arm_joint_if name="${prefix}joint1" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0"/>
       <xacro:arm_joint_if name="${prefix}joint2" lower="${-110*PI/180}" upper="${110*PI/180}" initial="${initial_j2}"/>
-      <xacro:arm_joint_if name="${prefix}joint3" lower="${-150*PI/180}" upper="${60*PI/180}" initial="${initial_j3}"/>
+      <xacro:arm_joint_if name="${prefix}joint3" lower="${-150*PI/180}" upper="${32*PI/180}" initial="${initial_j3}"/>
 
       <xacro:if value="${stage == 'full'}">
         <xacro:arm_joint_if name="${prefix}joint4" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0"/>
