@@ -7,7 +7,9 @@
              동역학 없음. 컨트롤러 설정·궤적 파이프라인 확인용
     gazebo : gz_ros2_control/GazeboSimSystem — Gazebo(Fortress) 물리 시뮬레이션.
              중력·관성·감쇠가 들어가고, effort 상태로 관절 토크를 읽을 수 있음
-  (실물 단계에서는 여기에 Damiao 하드웨어 인터페이스가 추가된다)
+    real   : arm_hardware/DamiaoSystem — 실물 Damiao 모터 (CAN, MIT 모드).
+             관절별 모터 ID·방향·배율·게인은 hw_config(arm_hardware/config/motors.yaml)에서 읽음.
+             active_joints 에 없는 관절은 명령을 그대로 상태로 돌려줌 (모터 일부만 연결해도 실행 가능)
 
   명령 인터페이스: 6축 + 그리퍼 모두 position
     → 실물 Damiao 모터의 위치 제어(내부 위치 루프)와 같은 구조로 맞춤
@@ -17,8 +19,23 @@
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="arm_joint_if" params="name lower upper initial cmd:=position">
+  <xacro:macro name="arm_joint_if" params="name lower upper initial cmd:=position hwkey:='' follow:=''">
     <joint name="${name}">
+      <!-- sim_mode:=real: 모터 설정 (arm_hw = motors.yaml) -->
+      <xacro:if value="${hwkey != ''}">
+        <xacro:property name="h" value="${arm_hw['motors'][hwkey]}"/>
+        <param name="model">${h['model']}</param>
+        <param name="esc_id">${h['esc_id']}</param>
+        <param name="mst_id">${h['mst_id']}</param>
+        <param name="direction">${h.get('direction', 1)}</param>
+        <param name="offset">${h.get('offset', 0.0)}</param>
+        <param name="scale">${h.get('scale', 1.0)}</param>
+        <param name="kp">${h.get('kp', 0.0)}</param>
+        <param name="kd">${h.get('kd', 0.0)}</param>
+      </xacro:if>
+      <xacro:if value="${follow != ''}">
+        <param name="follow">${follow}</param>
+      </xacro:if>
       <command_interface name="${cmd}">
         <xacro:if value="${cmd == 'position'}">
           <param name="min">${lower}</param>
@@ -33,7 +50,9 @@
     </joint>
   </xacro:macro>
 
-  <xacro:macro name="arm_ros2_control" params="prefix sim_mode stage initial_j2:=0.0 initial_j3:=0.0">
+  <xacro:macro name="arm_ros2_control" params="prefix sim_mode stage initial_j2:=0.0 initial_j3:=0.0
+                                                transport:=socketcan channel:=can0 active_joints:=all">
+    <xacro:property name="real" value="${sim_mode == 'real'}"/>
     <ros2_control name="${prefix}arm_system" type="system">
       <hardware>
         <xacro:if value="${sim_mode == 'mock'}">
@@ -44,24 +63,34 @@
           <plugin>gz_ros2_control/GazeboSimSystem</plugin>
           <!-- 위치 제어 게인(position_proportional_gain)은 arm_bringup/config/controllers_gazebo_overrides.yaml 에서 설정 -->
         </xacro:if>
+        <xacro:if value="${real}">
+          <plugin>arm_hardware/DamiaoSystem</plugin>
+          <param name="transport">${transport}</param>       <!-- socketcan | damiao-serial -->
+          <param name="channel">${channel}</param>           <!-- can0 | /dev/ttyACM0 -->
+          <param name="active_joints">${active_joints}</param> <!-- all | none | joint2,joint3 -->
+          <param name="max_tracking_error">0.3</param>       <!-- 명령과 현재 위치 차이 한계 [rad] → 넘으면 모두 정지 -->
+          <param name="feedback_timeout_cycles">20</param>   <!-- 응답이 이 주기 수만큼 연속 없으면 정지 -->
+        </xacro:if>
       </hardware>
 
-      <xacro:arm_joint_if name="${prefix}joint1" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0"/>
-      <xacro:arm_joint_if name="${prefix}joint2" lower="${-110*PI/180}" upper="${110*PI/180}" initial="${initial_j2}"/>
-      <xacro:arm_joint_if name="${prefix}joint3" lower="${-150*PI/180}" upper="${32*PI/180}" initial="${initial_j3}"/>
+      <xacro:arm_joint_if name="${prefix}joint1" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0" hwkey="${'joint1' if real else ''}"/>
+      <xacro:arm_joint_if name="${prefix}joint2" lower="${-110*PI/180}" upper="${110*PI/180}" initial="${initial_j2}" hwkey="${'joint2' if real else ''}"/>
+      <xacro:arm_joint_if name="${prefix}joint3" lower="${-150*PI/180}" upper="${32*PI/180}" initial="${initial_j3}" hwkey="${'joint3' if real else ''}"/>
 
       <xacro:if value="${stage == 'full'}">
-        <xacro:arm_joint_if name="${prefix}joint4" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0"/>
-        <xacro:arm_joint_if name="${prefix}joint5" lower="${-110*PI/180}" upper="${110*PI/180}" initial="0.0"/>
-        <xacro:arm_joint_if name="${prefix}joint6" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0"/>
+        <xacro:arm_joint_if name="${prefix}joint4" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0" hwkey="${'joint4' if real else ''}"/>
+        <xacro:arm_joint_if name="${prefix}joint5" lower="${-110*PI/180}" upper="${110*PI/180}" initial="0.0" hwkey="${'joint5' if real else ''}"/>
+        <xacro:arm_joint_if name="${prefix}joint6" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0" hwkey="${'joint6' if real else ''}"/>
         <!-- 두 핑거를 모두 일반 관절로 노출하고, 그리퍼 컨트롤러가 두 핑거에 같은 목표를 보낸다.
              (실물 하드웨어 인터페이스는 두 명령을 모터 1개로 합친다)
              Gazebo에서는 핑거를 effort(힘)로 구동하고 PD 제어는 그리퍼 컨트롤러가 맡는다.
              이 Gazebo 버전에서 오른쪽 핑거 관절이 속도 명령에 반응하지 않아서이며, 힘 명령은 정상 동작한다.
              (원인: 미확인. 독립 Gazebo 월드에서는 같은 관절이 속도 명령으로 움직임) -->
         <xacro:property name="finger_cmd" value="${'effort' if sim_mode == 'gazebo' else 'position'}"/>
-        <xacro:arm_joint_if name="${prefix}finger_left_joint" lower="0.0" upper="${arm_finger_stroke}" initial="0.0" cmd="${finger_cmd}"/>
-        <xacro:arm_joint_if name="${prefix}finger_right_joint" lower="0.0" upper="${arm_finger_stroke}" initial="0.0" cmd="${finger_cmd}"/>
+        <xacro:arm_joint_if name="${prefix}finger_left_joint" lower="0.0" upper="${arm_finger_stroke}" initial="0.0" cmd="${finger_cmd}"
+                            hwkey="${'gripper' if real else ''}"/>
+        <xacro:arm_joint_if name="${prefix}finger_right_joint" lower="0.0" upper="${arm_finger_stroke}" initial="0.0" cmd="${finger_cmd}"
+                            follow="${prefix + 'finger_left_joint' if real else ''}"/>
       </xacro:if>
     </ros2_control>
   </xacro:macro>

@@ -1,0 +1,5 @@
+<library path="arm_hardware">
+  <class name="arm_hardware/DamiaoSystem" type="arm_hardware::DamiaoSystem" base_class_type="hardware_interface::SystemInterface">
+    <description>Damiao actuators (DM-J4340P, DM-J4310, DM-H3510) over CAN in MIT mode</description>
+  </class>
+</library>

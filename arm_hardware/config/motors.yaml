@@ -1,17 +1,22 @@
-# 모터 ID 계획과 벤치 기본값
-#   esc_id : 모터 CAN ID (명령을 받는 ID)
-#   mst_id : 마스터 ID (모터가 응답을 보내는 ID). esc_id + 0x10, 0x00은 쓰지 않는다
-# 받은 모터의 실제 값은 `dm_bench scan`으로 확인한다. 공장 출고값이 모두 같으면 한 대씩 연결해 바꾼다.
+# 모터 ID 계획, 관절 ↔ 모터 변환, 게인 (벤치 도구 dm_bench 와 ros2_control 하드웨어 인터페이스가 같이 읽음)
+#   esc_id    : 모터 CAN ID (명령을 받는 ID)
+#   mst_id    : 마스터 ID (모터가 응답을 보내는 ID). esc_id + 0x10, 0x00은 쓰지 않는다
+#   direction : 관절 + 방향이 모터 + 방향과 반대면 -1 (조립 후 확인)
+#   offset    : 관절 0 일 때의 모터 각 [rad] (영점을 모터에 저장했다면 0)
+#   scale     : 모터 각 / 관절 값. 감속은 모터 안에 있으므로 팔 관절은 1, 그리퍼는 1/피니언 반지름 [rad/m]
+#   kp, kd    : MIT 위치 루프 게인 (모터 출력축 기준 N·m/rad, N·m·s/rad). 처음 값은 보수적으로, 3단계에서 조정
+# 받은 모터의 실제 ID는 `dm_bench scan`으로 확인한다. 공장 출고값이 모두 같으면 한 대씩 연결해 바꾼다.
 motors:
-  joint1:  {model: DM-J4340P-2EC, esc_id: 0x01, mst_id: 0x11}
-  joint2:  {model: DM-J4340P-2EC, esc_id: 0x02, mst_id: 0x12}
-  joint3:  {model: DM-J4340P-2EC, esc_id: 0x03, mst_id: 0x13}
-  joint4:  {model: DM-J4310-2EC,  esc_id: 0x04, mst_id: 0x14}
-  joint5:  {model: DM-J4310-2EC,  esc_id: 0x05, mst_id: 0x15}
-  joint6:  {model: DM-J4310-2EC,  esc_id: 0x06, mst_id: 0x16}
-  gripper: {model: DM-H3510,      esc_id: 0x07, mst_id: 0x17}
+  joint1:  {model: DM-J4340P-2EC, esc_id: 0x01, mst_id: 0x11, direction: 1, offset: 0.0, kp: 20.0, kd: 1.0}
+  joint2:  {model: DM-J4340P-2EC, esc_id: 0x02, mst_id: 0x12, direction: 1, offset: 0.0, kp: 20.0, kd: 1.0}
+  joint3:  {model: DM-J4340P-2EC, esc_id: 0x03, mst_id: 0x13, direction: 1, offset: 0.0, kp: 20.0, kd: 1.0}
+  joint4:  {model: DM-J4310-2EC,  esc_id: 0x04, mst_id: 0x14, direction: 1, offset: 0.0, kp: 8.0, kd: 0.3}
+  joint5:  {model: DM-J4310-2EC,  esc_id: 0x05, mst_id: 0x15, direction: 1, offset: 0.0, kp: 8.0, kd: 0.3}
+  joint6:  {model: DM-J4310-2EC,  esc_id: 0x06, mst_id: 0x16, direction: 1, offset: 0.0, kp: 8.0, kd: 0.3}
+  gripper: {model: DM-H3510,      esc_id: 0x07, mst_id: 0x17, direction: 1, offset: 0.0, scale: 100.0,
+            kp: 0.3, kd: 0.005, joint: finger_left_joint, follower: finger_right_joint}
 
-# 벤치 기본 게인과 안전 한계 (모델별). 처음에는 작게 시작해 필요할 때만 올린다
+# 벤치(dm_bench) 기본 게인과 안전 한계 (모델별). 처음에는 작게 시작해 필요할 때만 올린다
 bench:
   DM-J4340P-2EC: {kp: 8.0, kd: 0.4, tau_abort: 4.0, vel_abort: 3.0}
   DM-J4310-2EC:  {kp: 4.0, kd: 0.15, tau_abort: 2.0, vel_abort: 6.0}

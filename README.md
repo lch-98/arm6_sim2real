@@ -25,6 +25,7 @@ colcon build --symlink-install && source install/setup.bash
 ros2 launch arm_description display.launch.py     # RViz에서 모델 확인 (슬라이더)
 ros2 launch arm_bringup mock.launch.py            # ros2_control mock 하드웨어
 ros2 launch arm_bringup gazebo.launch.py          # Gazebo 물리 시뮬레이션
+ros2 launch arm_bringup real.launch.py            # 실물 Damiao 모터 (CAN), 모터 없이는 docs/05 6-1절의 가상 모터
 ```
 
 자세한 설치는 [docs/03_dev_setup.md](docs/03_dev_setup.md).
@@ -35,7 +36,7 @@ ros2 launch arm_bringup gazebo.launch.py          # Gazebo 물리 시뮬레이�
 |---|---|
 | `arm_description` | URDF/xacro, 메쉬, CAD 생성 스크립트, 프린팅 STL, ros2_control 하드웨어 정의 |
 | `arm_bringup` | 컨트롤러 설정, mock·Gazebo launch, 기준 궤적, 기록·분석 스크립트 |
-| `arm_hardware` | Damiao 모터 CAN 드라이버, 가상 모터, 1단계 모터 벤치 도구 (`dm_bench`) |
+| `arm_hardware` | ros2_control 하드웨어 인터페이스(Damiao, CAN·MIT 모드), 가상 모터, 1단계 모터 벤치 도구 (`dm_bench`) |
 
 ## 문서
 

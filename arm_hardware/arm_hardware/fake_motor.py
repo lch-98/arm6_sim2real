@@ -9,6 +9,9 @@ J, b, fc 등은 **가상값**이다. 실제 모터 특성은 1단계 측정으�
 단독 실행 (리눅스 가상 CAN):
     sudo modprobe vcan && sudo ip link add dev vcan0 type vcan && sudo ip link set up vcan0
     ros2 run arm_hardware dm_fake_motor --channel vcan0 --motor 1:0x11:DM-J4340P-2EC --motor 2:0x12:DM-J4310-2EC
+Damiao USB-CAN 시리얼 보드 흉내 (sudo 불필요):
+    ros2 run arm_hardware dm_fake_motor --iface damiao-serial-sim --channel /tmp/ttyDM0 --all
+    → 다른 프로그램은 --iface damiao-serial --channel /tmp/ttyDM0 로 연결
 """
 from __future__ import annotations
 
@@ -176,16 +179,26 @@ def main(argv=None):
     ap.add_argument("--channel", default="vcan0")
     ap.add_argument("--motor", action="append", default=[],
                     help="ESC_ID:MST_ID:모델[:레버추kg:레버길이m]  (여러 번 지정 가능)")
+    ap.add_argument("--all", action="store_true", help="config/motors.yaml 의 7대 전부")
     a = ap.parse_args(argv)
-    specs = a.motor or ["1:0x11:DM-J4340P-2EC", "2:0x12:DM-J4310-2EC"]
+    specs = list(a.motor)
+    if a.all:
+        from .bench import default_config_path, load_config
+        for v in load_config(default_config_path())["motors"].values():
+            specs.append(f"{v['esc_id']}:{v['mst_id']}:{v['model']}")
+    specs = specs or ["1:0x11:DM-J4340P-2EC", "2:0x12:DM-J4310-2EC"]
     srv = FakeMotorServer(open_transport(a.iface, a.channel), [parse_motor(s) for s in specs])
     print(f"가상 모터 {len(specs)}개 실행 중 ({a.iface}:{a.channel}). Ctrl+C로 종료")
     for s in specs:
         print("  ", s)
+    import signal
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, lambda *_: srv._stop.set())
     try:
         srv.run()
-    except KeyboardInterrupt:
-        pass
+    finally:
+        srv.tr.close()
+        print("종료")
 
 
 if __name__ == "__main__":

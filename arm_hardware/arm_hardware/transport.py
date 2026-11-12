@@ -106,8 +106,67 @@ class DamiaoSerialTransport(Transport):
         self.ser.close()
 
 
+class DamiaoSerialDeviceSim(Transport):
+    """
+    시험용: Damiao USB-CAN 보드 '쪽'을 흉내 낸다 (가상 모터가 사용).
+    의사 터미널(pty)을 만들고 channel 경로에 링크를 걸어, 호스트 프로그램이 그 경로를 시리얼 포트처럼 연다.
+    호스트 → 보드: 30바이트 프레임에서 ID·데이터를 꺼내 CAN 프레임으로 넘김
+    보드 → 호스트: CAN 프레임을 16바이트 프레임(AA 11 08 ID4 데이터8 55)으로 보냄
+    """
+    def __init__(self, link_path: str):
+        import os
+        import pty
+        import tty
+        self._os = os
+        self.master, slave = pty.openpty()
+        tty.setraw(slave)
+        self.slave_name = os.ttyname(slave)
+        self._slave_fd = slave
+        os.set_blocking(self.master, False)
+        self.link = link_path
+        if os.path.islink(link_path) or os.path.exists(link_path):
+            os.remove(link_path)
+        os.symlink(self.slave_name, link_path)
+        self.buf = bytearray()
+
+    def send(self, arb_id, data):
+        f = bytes([0xAA, 0x11, 0x08]) + arb_id.to_bytes(4, "little") + bytes(data) + bytes([0x55])
+        self._os.write(self.master, f)
+
+    def recv(self, timeout):
+        import select
+        end = time.perf_counter() + timeout
+        while True:
+            while len(self.buf) >= 30:
+                if self.buf[0] == 0x55 and self.buf[1] == 0xAA:
+                    arb_id = self.buf[13] | (self.buf[14] << 8)
+                    data = bytes(self.buf[21:29])
+                    del self.buf[:30]
+                    return arb_id, data
+                del self.buf[0]
+            left = end - time.perf_counter()
+            r, _, _ = select.select([self.master], [], [], max(0.0, left))
+            if not r:
+                return None
+            try:
+                self.buf += self._os.read(self.master, 4096)
+            except (BlockingIOError, OSError):
+                if time.perf_counter() >= end:
+                    return None
+
+    def close(self):
+        try:
+            self._os.remove(self.link)
+        except OSError:
+            pass
+        self._os.close(self.master)
+        self._os.close(self._slave_fd)
+
+
 def open_transport(kind: str, channel: str, bitrate: int = 1_000_000) -> Transport:
-    """kind: socketcan | damiao-serial | slcan | gs_usb | virtual"""
+    """kind: socketcan | damiao-serial | damiao-serial-sim | slcan | gs_usb | virtual"""
     if kind == "damiao-serial":
         return DamiaoSerialTransport(channel)
+    if kind == "damiao-serial-sim":
+        return DamiaoSerialDeviceSim(channel)
     return CanTransport(kind, channel, bitrate)

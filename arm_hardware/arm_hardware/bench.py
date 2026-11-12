@@ -358,27 +358,55 @@ def run_loop(b, m, a, duration, target_fn, writer=None, label=""):
     return rows
 
 
+def _hold_summary(rows, label, lever):
+    tail = [r for r in rows if r[0] > rows[-1][0] / 2]
+    taus = [r[4] for r in tail]
+    err = [r[1] - r[2] for r in tail]
+    tau_m = statistics.mean(taus)
+    q_m = statistics.mean(r[2] for r in tail)
+    print(f"{label}후반 평균 토크 {tau_m:+.4f} N·m (표준편차 {statistics.pstdev(taus):.4f}), "
+          f"위치 오차 평균 {statistics.mean(err) * 1e3:+.2f} mrad")
+    return tau_m, q_m
+
+
 def cmd_hold(b: Bench, a):
+    """
+    위치 유지 토크 기록. 위치 루프는 비례 제어라서 '부하 토크 ÷ kp'만큼 처지고,
+    정지 마찰이 부하 일부를 받아 토크가 그만큼 작게(또는 크게) 나온다.
+    --approach δ: 위(+δ)와 아래(−δ)에서 각각 다가와 유지 → 평균 = 부하 토크, 차이의 절반 = 정지 마찰
+    """
     m = b.select()
     kp, kd = b.gains(m)
     path = out_path(a, "hold", m)
+    results = []
     with open(path, "w", newline="") as f, b.active(m) as fb0:
         w = csv.writer(f)
         w.writerow(["label", "t", "q_des", "q", "dq", "tau", "temp"])
         q0 = fb0.q
-        print(f"위치 {q0:+.4f} rad 유지 (kp {kp}, kd {kd}) {a.seconds:g} s")
-        rows = run_loop(b, m, a, a.seconds, lambda t: (q0, 0.0), w, "hold")
-    if rows:
-        tail = [r for r in rows if r[0] > rows[-1][0] / 2]
-        taus = [r[4] for r in tail]
-        err = [r[1] - r[2] for r in tail]
-        print(f"후반 평균 토크 {statistics.mean(taus):+.4f} N·m (표준편차 {statistics.pstdev(taus):.4f}), "
-              f"위치 오차 평균 {statistics.mean(err) * 1e3:+.2f} mrad")
-        if a.lever:
-            mass, length = (float(x) for x in a.lever.split(","))
-            q_rel = statistics.mean(r[2] for r in tail)
-            print(f"  레버 기대 토크 m·g·L·cos(q) = {mass * 9.81 * length * math.cos(q_rel):+.4f} N·m "
-                  f"(q = 0 이 레버 수평이 되도록 영점을 잡은 경우)")
+        print(f"위치 {q0:+.4f} rad 유지 (kp {kp}, kd {kd}) {a.seconds:g} s"
+              + (f", 위·아래 ±{a.approach} rad에서 접근" if a.approach else ""))
+        if not a.approach:
+            rows = run_loop(b, m, a, a.seconds, lambda t: (q0, 0.0), w, "hold")
+            if rows:
+                results.append(_hold_summary(rows, "", a.lever))
+        else:
+            d = abs(a.approach)
+            for sgn, lab in ((1, "위에서"), (-1, "아래에서")):
+                qa = q0 + sgn * d
+                cur = b.motor.last.q if b.motor.last else q0
+                run_loop(b, m, a, 1.5, lambda t, c=cur, g=qa: min_jerk(c, g, 1.0, t), None)
+                run_loop(b, m, a, 1.5, lambda t, g=qa: min_jerk(g, q0, 1.0, t), None)
+                rows = run_loop(b, m, a, a.seconds, lambda t: (q0, 0.0), w, f"hold_{'up' if sgn > 0 else 'down'}")
+                if rows:
+                    results.append(_hold_summary(rows, f"[{lab}] ", a.lever))
+    if len(results) == 2:
+        tau_avg = (results[0][0] + results[1][0]) / 2
+        print(f"두 방향 평균 토크 {tau_avg:+.4f} N·m, 정지 마찰 추정 {abs(results[0][0] - results[1][0]) / 2:.4f} N·m")
+    if results and a.lever:
+        mass, length = (float(x) for x in a.lever.split(","))
+        q_rel = statistics.mean(r[1] for r in results)
+        print(f"  레버 기대 토크 m·g·L·cos(q) = {mass * 9.81 * length * math.cos(q_rel):+.4f} N·m "
+              f"(q = 0 이 레버 수평이 되도록 영점을 잡은 경우)")
     print("기록:", path)
 
 
@@ -515,7 +543,8 @@ def build_parser():
     sub.add_parser("clear")
     p = sub.add_parser("monitor"); p.add_argument("--seconds", type=float, default=0.0)
     p = sub.add_parser("hold"); p.add_argument("--seconds", type=float, default=10.0); \
-        p.add_argument("--lever", help="레버 추 'kg,m' — 기대 토크를 같이 출력")
+        p.add_argument("--lever", help="레버 추 'kg,m' — 기대 토크를 같이 출력"); \
+        p.add_argument("--approach", type=float, default=0.0, help="위·아래에서 이만큼 [rad] 떨어진 곳에서 다가와 각각 유지")
     p = sub.add_parser("move"); p.add_argument("--to", type=float, required=True); \
         p.add_argument("--relative", action="store_true"); p.add_argument("--vmax", type=float, default=0.5); \
         p.add_argument("--hold", type=float, default=1.0)

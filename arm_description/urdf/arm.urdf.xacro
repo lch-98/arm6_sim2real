@@ -6,6 +6,8 @@
     xacro arm.urdf.xacro camera:=none                     → 손목 카메라 없이
     xacro arm.urdf.xacro sim_mode:=mock                   → ros2_control mock 하드웨어 포함
     xacro arm.urdf.xacro sim_mode:=gazebo controllers_file:=<yaml> gazebo_overrides_file:=<yaml>   → Gazebo용
+    xacro arm.urdf.xacro sim_mode:=real hw_config:=<motors.yaml> transport:=socketcan channel:=can0 active_joints:=all
+                                                          → 실물 Damiao 모터 (arm_hardware/DamiaoSystem)
 -->
 <robot name="arm" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
@@ -16,6 +18,12 @@
   <xacro:arg name="sim_mode" default="none"/>
   <xacro:arg name="controllers_file" default=""/>
   <xacro:arg name="gazebo_overrides_file" default=""/>
+  <!-- sim_mode:=real 전용 -->
+  <xacro:arg name="hw_config" default=""/>
+  <xacro:arg name="transport" default="socketcan"/>
+  <xacro:arg name="channel" default="can0"/>
+  <xacro:arg name="active_joints" default="all"/>
+  <xacro:property name="arm_hw" value="${xacro.load_yaml('$(arg hw_config)') if '$(arg sim_mode)' == 'real' else None}"/>
 
   <xacro:include filename="$(find arm_description)/urdf/arm_macro.xacro"/>
   <xacro:include filename="$(find arm_description)/urdf/arm.ros2_control.xacro"/>
@@ -28,7 +36,8 @@
   </xacro:arm>
 
   <xacro:if value="${'$(arg sim_mode)' != 'none'}">
-    <xacro:arm_ros2_control prefix="$(arg prefix)" sim_mode="$(arg sim_mode)" stage="$(arg stage)"/>
+    <xacro:arm_ros2_control prefix="$(arg prefix)" sim_mode="$(arg sim_mode)" stage="$(arg stage)"
+                            transport="$(arg transport)" channel="$(arg channel)" active_joints="$(arg active_joints)"/>
   </xacro:if>
   <xacro:if value="${'$(arg sim_mode)' == 'gazebo'}">
     <xacro:arm_gazebo controllers_file="$(arg controllers_file)" gazebo_overrides_file="$(arg gazebo_overrides_file)"/>

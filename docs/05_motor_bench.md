@@ -203,7 +203,7 @@ sudo ip link set can0 type can bitrate 1000000 && sudo ip link set up can0   # S
 | 5 | `dm_bench --joint joint2 monitor` | 손으로 돌려 위치 부호·단위 확인. 전원을 껐다 켜도 위치가 유지되는지 (절대 위치) |
 | 6 | `dm_bench --joint joint2 zero` | 레버가 수평일 때 영점 저장 |
 | 7 | `dm_bench --joint joint2 move --to 0.3 --relative` | 작은 이동부터 |
-| 8 | `dm_bench --joint joint2 hold --seconds 20 --lever <kg>,<m>` | 토크 보정. 위·아래 양쪽에서 접근해 각각 기록 후 평균 (정지 마찰 영향 제거) |
+| 8 | `dm_bench --joint joint2 hold --seconds 10 --lever <kg>,<m> --approach 0.1` | 토크 보정. 위·아래에서 각각 다가와 유지 → 두 방향 평균 = 부하 토크, 차이의 절반 = 정지 마찰 |
 | 9 | `dm_bench --joint joint2 friction` | 레버 없이, 출력축이 자유롭게 돌 때 |
 | 10 | `dm_bench --joint joint2 latency` | 왕복 시간 분포 |
 | 11 | `dm_bench --joint joint2 sweep --ref-joint joint2 --scale 0.3` | 문제없으면 `--scale 1.0` |
@@ -211,6 +211,53 @@ sudo ip link set can0 type can bitrate 1000000 && sudo ip link set up can0   # S
 - 모든 결과는 `~/arm_bench_logs/`에 CSV로 남는다 (`--out`으로 변경)
 - **안전**: 아래 경우 즉시 모터를 사용 안 함으로 바꾸고 멈춘다 — Ctrl+C, 응답 5번 연속 없음, 모터 오류 상태, 토크·속도가 `motors.yaml`의 한계 초과, 시작 위치에서 1.6 rad 초과 이동, 온도 60 °C 초과. 모터에 브레이크가 없으므로 레버가 떨어져도 안전한 방향으로 둔다
 - 처음 게인은 작게 잡혀 있다 (4340P kp 8, kd 0.4 / 4310 kp 4, kd 0.15). 바꿀 때는 `--kp`, `--kd`
+- MIT 위치 제어는 비례 제어라서 **정지 오차 ≈ 부하 토크 ÷ kp**만큼 남는다. 예: 레버 부하 0.49 N·m, kp 8 → 약 60 mrad 처짐 (정지 마찰이 일부를 받으면 더 작음). 오차를 줄이려면 kp를 올리거나, 팔에서는 중력 토크를 피드포워드(tau)로 같이 보낸다
 - `set-id`의 ID 변경·저장 순서는 공개 자료 기준이며 실물에서 처음 확인한다
 
 참고: 프레임 정의는 Damiao 공개 자료와 [DM_Control_Python](https://github.com/cmjang/DM_Control_Python)(MIT License)을 따랐다. 공장 기본 변환 범위(4310: 12.5 / 30 / 10, 4340P: 12.5 / 8 / 28)는 [Seeed 위키](https://wiki.seeedstudio.com/damiao_series/) 기준이며, 도구는 실행할 때 모터 레지스터에서 다시 읽는다.
+
+## 6. ros2_control 하드웨어 인터페이스 (`arm_hardware/DamiaoSystem`)
+
+mock·Gazebo 자리에 실물 모터를 넣는 C++ 플러그인이다. 컨트롤러 설정, 기준 궤적, 기록·분석 스크립트는 0단계와 **그대로** 쓴다.
+
+| 항목 | 내용 |
+|---|---|
+| 제어 방식 | 200 Hz마다 관절마다 MIT 명령 1프레임 (목표 위치 + kp·kd, 속도·토크 피드포워드는 URDF에 velocity·effort 명령 인터페이스가 있을 때) |
+| 상태 | 모터 응답의 위치·속도·토크 → `/joint_states` (effort = 모터 추정 토크) |
+| 관절 ↔ 모터 | `모터 각 = direction × scale × 관절 값 + offset` (`config/motors.yaml`) |
+| 일부만 연결 | `active_joints`에 없는 관절은 mock처럼 명령을 그대로 상태로 돌려줌 → 모터 1대로도 전체 팔 컨트롤러 실행 |
+| 그리퍼 | 모터 1개 = `finger_left_joint` (scale 100 rad/m = 1 / 피니언 반지름 0.01 m), `finger_right_joint`는 그 상태를 따라감 |
+| 시작 | 설정(configure) 때 모터 레지스터에서 PMAX/VMAX/TMAX를 읽고, 활성화 때 현재 위치를 명령으로 잡아 튀지 않게 시작 |
+| 안전 | 아래 경우 **모든 모터를 사용 안 함**으로 바꾸고 오류: 응답 20주기(0.1 s) 연속 없음, 모터 오류 상태(과전압·저전압·과전류·과열·통신 끊김·과부하), 명령과 현재 위치 차이 0.3 rad 초과 |
+
+실물 전용 컨트롤러 허용 오차는 `arm_bringup/config/controllers_real_overrides.yaml`에서 넓게 잡았다. MIT 위치 제어는 정지 오차가 "부하 토크 ÷ kp"만큼 남아, 시뮬레이션 기준(0.03 rad)으로는 궤적이 중단되기 때문이다. 3단계에서 중력 토크 피드포워드와 게인을 조정한 뒤 다시 좁힌다.
+
+### 6-1. 모터 없이 시험 (가상 모터)
+
+```bash
+# 터미널 1: Damiao USB-CAN 보드를 흉내 내는 가상 모터 7대 (sudo 불필요)
+ros2 run arm_hardware dm_fake_motor --iface damiao-serial-sim --channel /tmp/ttyDM0 --all
+# 터미널 2
+ros2 launch arm_bringup real.launch.py transport:=damiao-serial channel:=/tmp/ttyDM0
+# 터미널 3: 0단계와 같은 기준 궤적·분석
+ros2 run arm_bringup run_reference.py --set sweeps --bag ~/arm_logs/fake_real
+ros2 run arm_bringup analyze_baseline.py ~/arm_logs/fake_real
+```
+
+- 가상 모터를 끄면(Ctrl+C) 0.1 s 안에 "응답이 21 주기 연속 없음 → 모든 모터 사용 안 함"이 나와야 정상이다
+- SocketCAN 경로는 `vcan0`으로 시험한다 (5-2절의 `dm_fake_motor --channel vcan0` + `real.launch.py channel:=vcan0`)
+- 가상 모터의 마찰·관성은 가상값이라 추종 오차 숫자 자체는 의미가 없다. 파이프라인이 끝까지 도는지만 본다
+
+### 6-2. 실물 1축 (1단계 마지막)
+
+```bash
+ros2 launch arm_bringup real.launch.py active_joints:=joint2                         # can0
+ros2 launch arm_bringup real.launch.py active_joints:=joint2 transport:=damiao-serial channel:=/dev/ttyACM0
+ros2 run arm_bringup run_reference.py --set sweeps --only joint2 --bag ~/arm_logs/bench_joint2
+ros2 run arm_bringup analyze_baseline.py ~/arm_logs/bench_joint2 --compare <Gazebo 기준선 bag>
+```
+
+1. 5-3절 순서로 ID·모드·영점을 먼저 맞춘다 (`dm_bench`는 `real.launch.py`와 동시에 쓰지 않는다)
+2. 처음에는 레버 없이, 그다음 레버+추로 같은 스윕을 돌린다
+3. 관절 + 방향과 모터 + 방향이 반대면 `motors.yaml`의 `direction: -1`
+4. 결과 요약을 `docs/results/01_motor_bench/`에 모은다

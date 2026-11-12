@@ -94,3 +94,13 @@ def test_safety_abort_on_torque(tmp_path):
         bench_main(["--fake", "--fake-lever", "3.0,0.2", "--joint", "joint4", "--out", str(tmp_path), "hold",
                     "--seconds", "2"])
     assert e.value.code == 2
+
+
+def test_cli_hold_two_directions(capsys, tmp_path):
+    bench_main(["--fake", "--fake-lever", "0.5,0.1", "--joint", "joint2", "--out", str(tmp_path), "hold",
+                "--seconds", "1.5", "--lever", "0.5,0.1", "--approach", "0.1"])
+    out = capsys.readouterr().out
+    avg = float(out.split("두 방향 평균 토크 ")[1].split(" ")[0])
+    fric = float(out.split("정지 마찰 추정 ")[1].split(" ")[0])
+    expected = float(out.split("m·g·L·cos(q) = ")[1].split(" ")[0])
+    assert abs(avg - expected) < 0.02 and abs(fric - 0.10) < 0.02
