@@ -17,3 +17,4 @@ arm_logs/
 .vscode/
 .idea/
 *.swp
+.pytest_cache/

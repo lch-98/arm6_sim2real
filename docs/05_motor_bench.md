@@ -137,12 +137,80 @@ Windows: Damiao 디버깅 어시스턴트(판매처·Damiao 자료실에서 받�
 
 ## 4. 측정 항목 (진행하면서 채움)
 
-| 항목 | 방법 | 반영처 |
+| 항목 | 방법 | 벤치 명령 (5절) | 반영처 |
+|---|---|---|---|
+| 절대 위치 유지 | 임의 각도에서 전원 껐다 켜기 | `monitor` | 원점 복귀 필요 여부 |
+| 토크 보정 | 레버 + 추를 정지 유지할 때 모터 보고 토크 vs m·g·L | `hold --lever` | 토크 보정계수 |
+| 마찰 | 여러 속도로 등속 회전 → 평균 토크 | `friction` | URDF `dynamics` (마찰·감쇠) |
+| 백래시 | 레버 끝을 양방향으로 밀며 각도 변화 | `monitor` (손으로) | 랜덤화 범위 |
+| 통신 지연 | 명령 → 응답 왕복 시간 | `latency`, `candump -td` | 시뮬레이션 지연 모델 |
+| 위치 루프 응답 | 기준 스윕(1축)을 실물에 돌려 추종 오차 측정 | `sweep` | Gazebo 대비 모터 모델 |
+| 발열 | 정격 근처 토크 유지하며 온도 기록 | `hold` (CSV의 temp 열) | 연속 사용 한계 |
+
+## 5. 벤치 소프트웨어 (`arm_hardware` 패키지)
+
+모터 없이도 미리 연습할 수 있게 **가상 모터**를 같이 넣었다. 실물과 같은 CAN 프로토콜로 동작한다.
+
+| 파일 | 내용 |
+|---|---|
+| `arm_hardware/dm_protocol.py` | Damiao 프레임 변환 (MIT 명령, 응답, 시스템 명령, 레지스터). ROS 의존 없음 |
+| `arm_hardware/transport.py` | CAN 연결: SocketCAN(can0·vcan0), Damiao USB-CAN 시리얼(/dev/ttyACM*) |
+| `arm_hardware/motor.py` | 모터 여러 대를 한 버스에서 다루는 클래스 (사용·해제·영점·MIT·레지스터 읽기/쓰기) |
+| `arm_hardware/fake_motor.py` | 가상 모터 (단순 동역학 + 레버 추). 마찰·관성 값은 가상값 |
+| `arm_hardware/bench.py` | 벤치 명령 `dm_bench` |
+| `config/motors.yaml` | 관절별 모터 ID 계획(ESC_ID 0x01~0x07, MST_ID +0x10), 모델별 기본 게인·안전 한계 |
+| `test/` | 프로토콜 변환·가상 모터 통합 시험 (`colcon test --packages-select arm_hardware`) |
+
+### 5-1. 준비
+
+```bash
+python3 -c "import can; print(can.__version__)"     # 4.x 여야 함
+pip install --user "python-can>=4" pyserial          # 3.x 이거나 없으면
+cd ~/ros2_ws && colcon build --symlink-install --packages-select arm_hardware && source install/setup.bash
+```
+
+### 5-2. 모터 없이 연습
+
+```bash
+ros2 run arm_hardware dm_bench --fake scan                       # 가상 모터 7대가 보임
+ros2 run arm_hardware dm_bench --fake --joint joint2 move --to 0.5
+ros2 run arm_hardware dm_bench --fake --fake-lever 0.5,0.1 --joint joint2 hold --seconds 5 --lever 0.5,0.1
+```
+
+`--fake`는 같은 프로그램 안에서 가상 모터를 띄운다. 실제 CAN 경로(SocketCAN)까지 시험하려면 리눅스 가상 CAN을 쓴다.
+
+```bash
+sudo modprobe vcan && sudo ip link add dev vcan0 type vcan && sudo ip link set up vcan0
+ros2 run arm_hardware dm_fake_motor --channel vcan0 --motor 1:0x11:DM-J4340P-2EC     # 터미널 1
+ros2 run arm_hardware dm_bench --channel vcan0 --joint joint1 monitor                # 터미널 2
+candump vcan0                                                                         # 터미널 3: 오가는 프레임 보기
+```
+
+### 5-3. 모터가 오면 (한 대씩)
+
+연결 옵션: USB-CAN 보드가 `can0`으로 잡히면 `--iface socketcan --channel can0`(기본값), 시리얼로 잡히면 `--iface damiao-serial --channel /dev/ttyACM0` (2-2-1 참고).
+
+```bash
+sudo ip link set can0 type can bitrate 1000000 && sudo ip link set up can0   # SocketCAN일 때
+```
+
+| 순서 | 명령 | 확인할 것 |
 |---|---|---|
-| 절대 위치 유지 | 임의 각도에서 전원 껐다 켜기 | 원점 복귀 필요 여부 |
-| 토크 보정 | 레버 + 추를 정지 유지할 때 모터 보고 토크 vs m·g·L | 토크 보정계수 |
-| 마찰 | 여러 속도로 등속 회전 → 평균 토크 | URDF `dynamics` (마찰·감쇠) |
-| 백래시 | 레버 끝을 양방향으로 밀며 각도 변화 | 랜덤화 범위 |
-| 통신 지연 | 명령 → 응답 프레임 시간차 (`candump -td`) | 시뮬레이션 지연 모델 |
-| 위치 루프 응답 | 기준 스윕(1축)을 실물에 돌려 추종 오차 측정 | Gazebo 대비 모터 모델 |
-| 발열 | 정격 근처 토크 유지하며 온도 기록 | 연속 사용 한계 |
+| 1 | `dm_bench scan` | 응답하는 모터, 현재 ESC_ID·MST_ID·제어 모드·PMAX/VMAX/TMAX |
+| 2 | `dm_bench --id <현재> set-id --new-id 0x02 --new-mst 0x12` | 버스에 **한 대만** 연결. 전원을 껐다 켜고 `scan`으로 확인. 바뀌지 않으면 Damiao 디버깅 도구(Windows)로 변경 |
+| 3 | `dm_bench --joint joint2 set-mode --save` | 제어 모드 MIT(1) |
+| 4 | `dm_bench --joint joint2 info` | 변환 범위, 해상도, 온도, 보호 설정 |
+| 5 | `dm_bench --joint joint2 monitor` | 손으로 돌려 위치 부호·단위 확인. 전원을 껐다 켜도 위치가 유지되는지 (절대 위치) |
+| 6 | `dm_bench --joint joint2 zero` | 레버가 수평일 때 영점 저장 |
+| 7 | `dm_bench --joint joint2 move --to 0.3 --relative` | 작은 이동부터 |
+| 8 | `dm_bench --joint joint2 hold --seconds 20 --lever <kg>,<m>` | 토크 보정. 위·아래 양쪽에서 접근해 각각 기록 후 평균 (정지 마찰 영향 제거) |
+| 9 | `dm_bench --joint joint2 friction` | 레버 없이, 출력축이 자유롭게 돌 때 |
+| 10 | `dm_bench --joint joint2 latency` | 왕복 시간 분포 |
+| 11 | `dm_bench --joint joint2 sweep --ref-joint joint2 --scale 0.3` | 문제없으면 `--scale 1.0` |
+
+- 모든 결과는 `~/arm_bench_logs/`에 CSV로 남는다 (`--out`으로 변경)
+- **안전**: 아래 경우 즉시 모터를 사용 안 함으로 바꾸고 멈춘다 — Ctrl+C, 응답 5번 연속 없음, 모터 오류 상태, 토크·속도가 `motors.yaml`의 한계 초과, 시작 위치에서 1.6 rad 초과 이동, 온도 60 °C 초과. 모터에 브레이크가 없으므로 레버가 떨어져도 안전한 방향으로 둔다
+- 처음 게인은 작게 잡혀 있다 (4340P kp 8, kd 0.4 / 4310 kp 4, kd 0.15). 바꿀 때는 `--kp`, `--kd`
+- `set-id`의 ID 변경·저장 순서는 공개 자료 기준이며 실물에서 처음 확인한다
+
+참고: 프레임 정의는 Damiao 공개 자료와 [DM_Control_Python](https://github.com/cmjang/DM_Control_Python)(MIT License)을 따랐다. 공장 기본 변환 범위(4310: 12.5 / 30 / 10, 4340P: 12.5 / 8 / 28)는 [Seeed 위키](https://wiki.seeedstudio.com/damiao_series/) 기준이며, 도구는 실행할 때 모터 레지스터에서 다시 읽는다.

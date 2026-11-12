@@ -35,6 +35,7 @@ ros2 launch arm_bringup gazebo.launch.py          # Gazebo 물리 시뮬레이�
 |---|---|
 | `arm_description` | URDF/xacro, 메쉬, CAD 생성 스크립트, 프린팅 STL, ros2_control 하드웨어 정의 |
 | `arm_bringup` | 컨트롤러 설정, mock·Gazebo launch, 기준 궤적, 기록·분석 스크립트 |
+| `arm_hardware` | Damiao 모터 CAN 드라이버, 가상 모터, 1단계 모터 벤치 도구 (`dm_bench`) |
 
 ## 문서
 

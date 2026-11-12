@@ -1,0 +1,20 @@
+# 모터 ID 계획과 벤치 기본값
+#   esc_id : 모터 CAN ID (명령을 받는 ID)
+#   mst_id : 마스터 ID (모터가 응답을 보내는 ID). esc_id + 0x10, 0x00은 쓰지 않는다
+# 받은 모터의 실제 값은 `dm_bench scan`으로 확인한다. 공장 출고값이 모두 같으면 한 대씩 연결해 바꾼다.
+motors:
+  joint1:  {model: DM-J4340P-2EC, esc_id: 0x01, mst_id: 0x11}
+  joint2:  {model: DM-J4340P-2EC, esc_id: 0x02, mst_id: 0x12}
+  joint3:  {model: DM-J4340P-2EC, esc_id: 0x03, mst_id: 0x13}
+  joint4:  {model: DM-J4310-2EC,  esc_id: 0x04, mst_id: 0x14}
+  joint5:  {model: DM-J4310-2EC,  esc_id: 0x05, mst_id: 0x15}
+  joint6:  {model: DM-J4310-2EC,  esc_id: 0x06, mst_id: 0x16}
+  gripper: {model: DM-H3510,      esc_id: 0x07, mst_id: 0x17}
+
+# 벤치 기본 게인과 안전 한계 (모델별). 처음에는 작게 시작해 필요할 때만 올린다
+bench:
+  DM-J4340P-2EC: {kp: 8.0, kd: 0.4, tau_abort: 4.0, vel_abort: 3.0}
+  DM-J4310-2EC:  {kp: 4.0, kd: 0.15, tau_abort: 2.0, vel_abort: 6.0}
+  DM-H3510:      {kp: 0.5, kd: 0.01, tau_abort: 0.2, vel_abort: 20.0}
+  temp_stop: 60          # 코일 또는 드라이버 온도가 이 값을 넘으면 사용 안 함 [°C]
+  range_abort: 1.6       # 시작 위치에서 이만큼 [rad] 넘게 벗어나면 사용 안 함
