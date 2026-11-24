@@ -23,6 +23,7 @@
   <xacro:arg name="transport" default="socketcan"/>
   <xacro:arg name="channel" default="can0"/>
   <xacro:arg name="active_joints" default="all"/>
+  <xacro:arg name="friction_ff" default="false"/>
   <xacro:property name="arm_hw" value="${xacro.load_yaml('$(arg hw_config)') if '$(arg sim_mode)' == 'real' else None}"/>
 
   <xacro:include filename="$(find arm_description)/urdf/arm_macro.xacro"/>
@@ -37,7 +38,8 @@
 
   <xacro:if value="${'$(arg sim_mode)' != 'none'}">
     <xacro:arm_ros2_control prefix="$(arg prefix)" sim_mode="$(arg sim_mode)" stage="$(arg stage)"
-                            transport="$(arg transport)" channel="$(arg channel)" active_joints="$(arg active_joints)"/>
+                            transport="$(arg transport)" channel="$(arg channel)" active_joints="$(arg active_joints)"
+                            friction_ff="$(arg friction_ff)"/>
   </xacro:if>
   <xacro:if value="${'$(arg sim_mode)' == 'gazebo'}">
     <xacro:arm_gazebo controllers_file="$(arg controllers_file)" gazebo_overrides_file="$(arg gazebo_overrides_file)"/>

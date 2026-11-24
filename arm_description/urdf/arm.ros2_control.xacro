@@ -13,13 +13,15 @@
 
   명령 인터페이스: 6축 + 그리퍼 모두 position
     → 실물 Damiao 모터의 위치 제어(내부 위치 루프)와 같은 구조로 맞춤
+    sim_mode:=real 에서는 6축에 velocity 명령도 추가 → 궤적의 목표 속도가 MIT 명령의 dq_des 로 들어감
+    (없으면 dq_des = 0 이 되어 kd·(0 − dq) 가 움직임을 거꾸로 잡아당김. 1단계 측정: J2 스윕 오차 18.6 → 31.9 mrad)
   상태 인터페이스: position, velocity, effort
 
   그리퍼: finger_left_joint, finger_right_joint 둘 다 같은 값으로 명령 (실물은 모터 1개가 랙·피니언으로 두 핑거를 구동)
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="arm_joint_if" params="name lower upper initial cmd:=position hwkey:='' follow:=''">
+  <xacro:macro name="arm_joint_if" params="name lower upper initial cmd:=position hwkey:='' follow:='' vel_cmd:=false">
     <joint name="${name}">
       <!-- sim_mode:=real: 모터 설정 (arm_hw = motors.yaml) -->
       <xacro:if value="${hwkey != ''}">
@@ -32,6 +34,8 @@
         <param name="scale">${h.get('scale', 1.0)}</param>
         <param name="kp">${h.get('kp', 0.0)}</param>
         <param name="kd">${h.get('kd', 0.0)}</param>
+        <param name="fc">${h.get('fc', 0.0)}</param>
+        <param name="fv">${h.get('fv', 0.0)}</param>
       </xacro:if>
       <xacro:if value="${follow != ''}">
         <param name="follow">${follow}</param>
@@ -42,6 +46,9 @@
           <param name="max">${upper}</param>
         </xacro:if>
       </command_interface>
+      <xacro:if value="${vel_cmd}">
+        <command_interface name="velocity"/>
+      </xacro:if>
       <state_interface name="position">
         <param name="initial_value">${initial}</param>
       </state_interface>
@@ -51,7 +58,7 @@
   </xacro:macro>
 
   <xacro:macro name="arm_ros2_control" params="prefix sim_mode stage initial_j2:=0.0 initial_j3:=0.0
-                                                transport:=socketcan channel:=can0 active_joints:=all">
+                                                transport:=socketcan channel:=can0 active_joints:=all friction_ff:=false">
     <xacro:property name="real" value="${sim_mode == 'real'}"/>
     <ros2_control name="${prefix}arm_system" type="system">
       <hardware>
@@ -70,17 +77,18 @@
           <param name="active_joints">${active_joints}</param> <!-- all | none | joint2,joint3 -->
           <param name="max_tracking_error">0.3</param>       <!-- 명령과 현재 위치 차이 한계 [rad] → 넘으면 모두 정지 -->
           <param name="feedback_timeout_cycles">20</param>   <!-- 응답이 이 주기 수만큼 연속 없으면 정지 -->
+          <param name="friction_ff">${friction_ff}</param>     <!-- true: 목표 속도로 마찰 토크(fc, fv)를 미리 더함 -->
         </xacro:if>
       </hardware>
 
-      <xacro:arm_joint_if name="${prefix}joint1" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0" hwkey="${'joint1' if real else ''}"/>
-      <xacro:arm_joint_if name="${prefix}joint2" lower="${-110*PI/180}" upper="${110*PI/180}" initial="${initial_j2}" hwkey="${'joint2' if real else ''}"/>
-      <xacro:arm_joint_if name="${prefix}joint3" lower="${-150*PI/180}" upper="${32*PI/180}" initial="${initial_j3}" hwkey="${'joint3' if real else ''}"/>
+      <xacro:arm_joint_if name="${prefix}joint1" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0" hwkey="${'joint1' if real else ''}" vel_cmd="${real}"/>
+      <xacro:arm_joint_if name="${prefix}joint2" lower="${-110*PI/180}" upper="${110*PI/180}" initial="${initial_j2}" hwkey="${'joint2' if real else ''}" vel_cmd="${real}"/>
+      <xacro:arm_joint_if name="${prefix}joint3" lower="${-150*PI/180}" upper="${32*PI/180}" initial="${initial_j3}" hwkey="${'joint3' if real else ''}" vel_cmd="${real}"/>
 
       <xacro:if value="${stage == 'full'}">
-        <xacro:arm_joint_if name="${prefix}joint4" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0" hwkey="${'joint4' if real else ''}"/>
-        <xacro:arm_joint_if name="${prefix}joint5" lower="${-110*PI/180}" upper="${110*PI/180}" initial="0.0" hwkey="${'joint5' if real else ''}"/>
-        <xacro:arm_joint_if name="${prefix}joint6" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0" hwkey="${'joint6' if real else ''}"/>
+        <xacro:arm_joint_if name="${prefix}joint4" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0" hwkey="${'joint4' if real else ''}" vel_cmd="${real}"/>
+        <xacro:arm_joint_if name="${prefix}joint5" lower="${-110*PI/180}" upper="${110*PI/180}" initial="0.0" hwkey="${'joint5' if real else ''}" vel_cmd="${real}"/>
+        <xacro:arm_joint_if name="${prefix}joint6" lower="${-170*PI/180}" upper="${170*PI/180}" initial="0.0" hwkey="${'joint6' if real else ''}" vel_cmd="${real}"/>
         <!-- 두 핑거를 모두 일반 관절로 노출하고, 그리퍼 컨트롤러가 두 핑거에 같은 목표를 보낸다.
              (실물 하드웨어 인터페이스는 두 명령을 모터 1개로 합친다)
              Gazebo에서는 핑거를 effort(힘)로 구동하고 PD 제어는 그리퍼 컨트롤러가 맡는다.

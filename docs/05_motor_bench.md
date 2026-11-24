@@ -224,7 +224,8 @@ mock·Gazebo 자리에 실물 모터를 넣는 C++ 플러그인이다. 컨트롤
 
 | 항목 | 내용 |
 |---|---|
-| 제어 방식 | 200 Hz마다 관절마다 MIT 명령 1프레임 (목표 위치 + kp·kd, 속도·토크 피드포워드는 URDF에 velocity·effort 명령 인터페이스가 있을 때) |
+| 제어 방식 | 200 Hz마다 관절마다 MIT 명령 1프레임: 목표 위치·목표 속도(6축 velocity 명령 인터페이스) + kp·kd. 목표 속도가 없으면 `kd·(0 − dq)`가 움직임을 거꾸로 잡아당겨 오차가 커진다 (1단계 J2: 18.6 → 31.9 mrad) |
+| 마찰 보상 | `friction_ff:=true`면 `motors.yaml`의 `fc`, `fv`로 `fc·tanh(dq_des/0.05) + fv·dq_des`를 토크 항에 더함 (기본 꺼짐) |
 | 상태 | 모터 응답의 위치·속도·토크 → `/joint_states` (effort = 모터 추정 토크) |
 | 관절 ↔ 모터 | `모터 각 = direction × scale × 관절 값 + offset` (`config/motors.yaml`) |
 | 일부만 연결 | `active_joints`에 없는 관절은 mock처럼 명령을 그대로 상태로 돌려줌 → 모터 1대로도 전체 팔 컨트롤러 실행 |
@@ -255,6 +256,7 @@ ros2 run arm_bringup analyze_baseline.py ~/arm_logs/fake_real
 ```bash
 ros2 launch arm_bringup real.launch.py active_joints:=joint2                         # can0
 ros2 launch arm_bringup real.launch.py active_joints:=joint2 transport:=damiao-serial channel:=/dev/ttyACM0
+ros2 launch arm_bringup real.launch.py active_joints:=joint2 transport:=damiao-serial channel:=/dev/ttyACM0 friction_ff:=true   # 마찰 보상
 ros2 run arm_bringup run_reference.py --set sweeps --only joint2 --bag ~/arm_logs/bench_joint2
 ros2 run arm_bringup analyze_baseline.py ~/arm_logs/bench_joint2 --compare <Gazebo 기준선 bag>
 ```

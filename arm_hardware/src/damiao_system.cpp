@@ -25,6 +25,15 @@ std::string param(const std::unordered_map<std::string, std::string> & p, const 
   return it == p.end() ? def : it->second;
 }
 
+// xacro 가 true 를 True 로 바꿔 넣기도 하므로 대소문자·숫자 모두 받는다
+bool param_b(const std::unordered_map<std::string, std::string> & p, const std::string & key, bool def)
+{
+  auto it = p.find(key);
+  if (it == p.end()) {return def;}
+  const auto & v = it->second;
+  return v == "true" || v == "True" || v == "TRUE" || v == "1";
+}
+
 double param_d(const std::unordered_map<std::string, std::string> & p, const std::string & key, double def)
 {
   auto it = p.find(key);
@@ -62,7 +71,8 @@ CallbackReturn DamiaoSystem::on_init(const hi::HardwareInfo & info)
   channel_ = param(hp, "channel", "can0");
   max_missed_ = param_i(hp, "feedback_timeout_cycles", 20);
   max_tracking_error_ = param_d(hp, "max_tracking_error", 0.3);
-  read_limits_ = param(hp, "read_limits", "true") == "true";
+  read_limits_ = param_b(hp, "read_limits", true);
+  friction_ff_ = param_b(hp, "friction_ff", false);
   const std::string active_s = param(hp, "active_joints", "all");
   const auto active_list = split(active_s);
   auto is_active = [&](const std::string & n) {
@@ -84,6 +94,8 @@ CallbackReturn DamiaoSystem::on_init(const hi::HardwareInfo & info)
     j.lim = dm::default_limits(j.model);
     j.kp = param_d(p, "kp", 0.0);
     j.kd = param_d(p, "kd", 0.0);
+    j.fc = param_d(p, "fc", 0.0);
+    j.fv = param_d(p, "fv", 0.0);
     j.direction = param_d(p, "direction", 1.0) < 0 ? -1.0 : 1.0;
     j.scale = param_d(p, "scale", 1.0);
     j.offset = param_d(p, "offset", 0.0);
@@ -121,6 +133,8 @@ CallbackReturn DamiaoSystem::on_init(const hi::HardwareInfo & info)
       any_active_ = true;
       RCLCPP_INFO(LOG(), "%s → 모터 ESC 0x%02X / MST 0x%02X (%s), kp %.2f kd %.3f, 방향 %+.0f, 배율 %g, 오프셋 %g",
         j.name.c_str(), j.esc_id, j.mst_id, j.model.c_str(), j.kp, j.kd, j.direction, j.scale, j.offset);
+      RCLCPP_INFO(LOG(), "%s: 속도 명령 %s, 마찰 보상 %s (fc %.3f N·m, fv %.3f N·m·s/rad)", j.name.c_str(),
+        j.has_cmd_vel ? "있음" : "없음 (목표 속도 0)", friction_ff_ ? "켬" : "끔", j.fc, j.fv);
     } else if (j.follow < 0) {
       RCLCPP_INFO(LOG(), "%s → 모터 없음 (명령을 상태로 돌려줌)", j.name.c_str());
     }
@@ -312,7 +326,7 @@ hi::return_type DamiaoSystem::read(const rclcpp::Time &, const rclcpp::Duration 
     if (j.follow >= 0) {continue;}
     if (!j.active) {
       if (!std::isnan(j.cmd_pos)) {j.pos = j.cmd_pos;}
-      j.vel = 0.0;
+      j.vel = (j.has_cmd_vel && !std::isnan(j.cmd_vel)) ? j.cmd_vel : 0.0;
       j.eff = 0.0;
       continue;
     }
@@ -361,7 +375,11 @@ hi::return_type DamiaoSystem::write(const rclcpp::Time &, const rclcpp::Duration
     }
     const double dq = (j.has_cmd_vel && !std::isnan(j.cmd_vel)) ? j.cmd_vel : 0.0;
     const double tau = (j.has_cmd_eff && !std::isnan(j.cmd_eff)) ? j.cmd_eff : 0.0;
-    const auto d = dm::pack_mit(j.k() * q + j.offset, j.k() * dq, j.kp, j.kd, tau / j.k(), j.lim);
+    // 모터 출력축 기준 목표 속도·토크. 마찰은 모터 쪽에서 잰 값이므로 모터 속도로 계산해 더한다
+    const double dq_m = j.k() * dq;
+    double tau_m = tau / j.k();
+    if (friction_ff_) {tau_m += j.fc * std::tanh(dq_m / FF_V0) + j.fv * dq_m;}
+    const auto d = dm::pack_mit(j.k() * q + j.offset, dq_m, j.kp, j.kd, tau_m, j.lim);
     tr_->send(j.esc_id, d.data());
   }
   return hi::return_type::OK;

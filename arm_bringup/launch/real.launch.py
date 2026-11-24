@@ -5,6 +5,7 @@
   ros2 launch arm_bringup real.launch.py active_joints:=joint2             # 1단계: 모터 1대만, 나머지는 명령을 그대로 돌려줌
   ros2 launch arm_bringup real.launch.py transport:=damiao-serial channel:=/dev/ttyACM0
   ros2 launch arm_bringup real.launch.py stage:=j1to3 active_joints:=joint1,joint2,joint3
+  ros2 launch arm_bringup real.launch.py active_joints:=joint2 friction_ff:=true    # 마찰 보상 (motors.yaml fc, fv)
 
 모터 없이 시험 (가상 모터):
   ros2 run arm_hardware dm_fake_motor --iface damiao-serial-sim --channel /tmp/ttyDM0 --all     # 터미널 1
@@ -37,6 +38,7 @@ def _setup(context):
             " transport:=", LaunchConfiguration("transport"),
             " channel:=", LaunchConfiguration("channel"),
             " active_joints:=", LaunchConfiguration("active_joints"),
+            " friction_ff:=", LaunchConfiguration("friction_ff"),
         ]),
         value_type=str,
     )
@@ -85,6 +87,8 @@ def generate_launch_description():
                               description="all | none | 쉼표로 나열 (예: joint2). 나머지는 명령을 그대로 돌려줌"),
         DeclareLaunchArgument("hw_config", default_value=PathJoinSubstitution(
             [FindPackageShare("arm_hardware"), "config", "motors.yaml"])),
+        DeclareLaunchArgument("friction_ff", default_value="false",
+                              description="true: motors.yaml 의 fc, fv 로 마찰 토크를 미리 더함"),
         DeclareLaunchArgument("rviz", default_value="true", description="RViz 실행 여부"),
         OpaqueFunction(function=_setup),
     ])

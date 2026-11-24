@@ -56,6 +56,7 @@ private:
     std::string model;
     dm::Limits lim;
     double kp{0.0}, kd{0.0}, direction{1.0}, scale{1.0}, offset{0.0};
+    double fc{0.0}, fv{0.0};   // 측정한 쿨롱·점성 마찰 (모터 출력축 기준, friction_ff 일 때만 사용)
     double pos{0.0}, vel{0.0}, eff{0.0};
     double cmd_pos{NaN}, cmd_vel{NaN}, cmd_eff{NaN};
     bool has_cmd_vel{false}, has_cmd_eff{false};
@@ -76,6 +77,8 @@ private:
   int max_missed_{20};
   double max_tracking_error_{0.3};
   bool read_limits_{true};
+  bool friction_ff_{false};
+  static constexpr double FF_V0 = 0.05;   // 마찰 보상 부호를 부드럽게 바꾸는 속도 폭 [rad/s] (dm_bench 와 같은 값)
   bool any_active_{false};
 };
 
