@@ -230,13 +230,16 @@ def sine_sweep_point(A, T, cycles, t):
 # ---------------------------------------------------------------------------
 REG_SHOW = [("ESC_ID", dp.Rid.ESC_ID, "0x{:02X}"), ("MST_ID", dp.Rid.MST_ID, "0x{:02X}"),
             ("CTRL_MODE", dp.Rid.CTRL_MODE, "{}"), ("PMAX", dp.Rid.PMAX, "{:g}"), ("VMAX", dp.Rid.VMAX, "{:g}"),
-            ("TMAX", dp.Rid.TMAX, "{:g}"), ("감속비", dp.Rid.GR, "{:g}"), ("SW", dp.Rid.SW_VER, "{}"),
+            ("TMAX", dp.Rid.TMAX, "{:g}"), ("감속비", dp.Rid.GR, "{:g}"), ("SW", dp.Rid.SW_VER, "ascii"),
             ("TIMEOUT", dp.Rid.TIMEOUT, "{}")]
 
 
 def fmt(v, f):
     if v is None:
         return "-"
+    if f == "ascii":   # 펌웨어 버전: 4바이트 ASCII (예: 942747703 → "7018")
+        raw = int(v).to_bytes(4, "little")
+        return raw.decode("ascii") if all(48 <= c < 127 for c in raw) else str(v)
     try:
         return f.format(int(v) if "X" in f or f == "{}" else v)
     except (ValueError, TypeError):
@@ -422,11 +425,43 @@ def cmd_move(b: Bench, a):
         print(f"최종 위치 {rows[-1][2]:+.4f} rad, 오차 {(q1 - rows[-1][2]) * 1e3:+.2f} mrad, 토크 {rows[-1][4]:+.3f} N·m")
 
 
+FRICTION_KD = {"DM-J4340P-2EC": 3.0, "DM-J4310-2EC": 1.0, "DM-H3510": 0.05}
+
+
+def fit_friction(result):
+    """
+    result: [(목표 속도, 실제 평균 속도, 평균 토크)]
+    움직이지 못한 구간(실제 속도가 0.05 rad/s 미만이거나 방향이 반대)은 빼고, 방향별로 tau = c + b·dq 직선을 맞춘다.
+    반환: dict(fc=쿨롱 마찰(두 방향 절편 크기 평균), b=점성 마찰(기울기 평균), bias=두 절편의 평균(중력 등 한쪽으로 쏠린 힘),
+              stuck=[움직이지 못한 목표 속도], stuck_tau=그때 낸 토크 최대)
+    """
+    moving = [r for r in result if abs(r[1]) >= 0.05 and r[1] * r[0] > 0]
+    stuck = [r for r in result if r not in moving]
+    out = dict(stuck=[r[0] for r in stuck], stuck_tau=max((abs(r[2]) for r in stuck), default=0.0))
+    lines = {}
+    for sgn in (1, -1):
+        pts = [(r[1], r[2]) for r in moving if r[1] * sgn > 0]
+        if len(pts) >= 2:
+            n = len(pts); mx = sum(p[0] for p in pts) / n; my = sum(p[1] for p in pts) / n
+            sxx = sum((p[0] - mx) ** 2 for p in pts)
+            slope = sum((p[0] - mx) * (p[1] - my) for p in pts) / sxx if sxx > 1e-12 else 0.0
+            lines[sgn] = (my - slope * mx, slope)
+    if 1 in lines and -1 in lines:
+        out.update(fc=(lines[1][0] - lines[-1][0]) / 2, b=(lines[1][1] + lines[-1][1]) / 2,
+                   bias=(lines[1][0] + lines[-1][0]) / 2, lines=lines)
+    return out
+
+
 def cmd_friction(b: Bench, a):
+    """
+    속도 제어(kp 0)로 여러 속도에서 등속 회전 → 평균 토크 = 마찰 토크.
+    모터가 내는 토크는 kd × (목표 속도 − 실제 속도) 라서, kd가 작으면 낮은 속도에서 정지 마찰을 못 넘고 서 있게 된다.
+    → 모델별 기본 kd (4340P 3.0, 4310 1.0). 움직이지 못한 구간은 추정에서 빼고 따로 알려 준다.
+    """
     m = b.select()
     speeds = [float(s) for s in a.speeds.split(",")]
     path = out_path(a, "friction", m)
-    kd = a.kd if a.kd is not None else 1.0
+    kd = a.kd if a.kd is not None else FRICTION_KD.get(m.model, 1.0)
     print(f"속도 제어(kp 0, kd {kd})로 각 속도 {a.seconds_per:g} s, 양방향. 출력축이 자유롭게 돌 수 있어야 합니다")
     result = []
     with open(path, "w", newline="") as f, b.active(m):
@@ -449,20 +484,21 @@ def cmd_friction(b: Bench, a):
                 steady = [r for r in rows if r[0] > a.seconds_per * 0.4]
                 if steady:
                     dq_m = statistics.mean(r[3] for r in steady)
+                    dq_s = statistics.pstdev(r[3] for r in steady)
                     tau_m = statistics.mean(r[4] for r in steady)
                     result.append((vd, dq_m, tau_m))
-                    print(f"  목표 {vd:+5.2f} rad/s → 실제 {dq_m:+6.3f} rad/s, 평균 토크 {tau_m:+.4f} N·m")
-    if len(result) >= 4:
-        # tau = fc·sign(dq) + b·dq  최소제곱
-        X = [(math.copysign(1, r[1]), r[1]) for r in result]
-        y = [r[2] for r in result]
-        s11 = sum(x[0] * x[0] for x in X); s12 = sum(x[0] * x[1] for x in X); s22 = sum(x[1] * x[1] for x in X)
-        t1 = sum(x[0] * yy for x, yy in zip(X, y)); t2 = sum(x[1] * yy for x, yy in zip(X, y))
-        det = s11 * s22 - s12 * s12
-        if abs(det) > 1e-9:
-            fc = (t1 * s22 - t2 * s12) / det
-            bv = (s11 * t2 - s12 * t1) / det
-            print(f"추정: 쿨롱 마찰 {fc:.4f} N·m, 점성 마찰 {bv:.4f} N·m·s/rad → URDF <dynamics friction damping>")
+                    note = "  ← 거의 못 움직임 (정지 마찰을 못 넘음)" if abs(dq_m) < 0.05 or dq_m * vd <= 0 else \
+                        ("  ← 속도가 크게 흔들림 (붙었다 미끄러짐)" if dq_s > 0.5 * abs(dq_m) else "")
+                    print(f"  목표 {vd:+5.2f} rad/s → 실제 {dq_m:+6.3f} ±{dq_s:.3f} rad/s, 평균 토크 {tau_m:+.4f} N·m{note}")
+    r = fit_friction(result)
+    if r["stuck"]:
+        print(f"움직이지 못한 목표 속도 {r['stuck']}: 그때 토크 최대 {r['stuck_tau']:.3f} N·m → 정지 마찰은 이보다 큼"
+              f" (--kd 를 올리면 확인 가능)")
+    if "fc" in r:
+        print(f"추정 (움직인 구간만): 쿨롱 마찰 {r['fc']:.4f} N·m, 점성 마찰 {r['b']:.4f} N·m·s/rad, "
+              f"한쪽 쏠림 {r['bias']:+.4f} N·m → URDF <dynamics friction damping>")
+    else:
+        print("추정 불가: 양방향 각각 2개 이상 속도에서 움직여야 함 (--kd 를 올리거나 --speeds 를 바꿔 다시)")
     print("기록:", path)
 
 

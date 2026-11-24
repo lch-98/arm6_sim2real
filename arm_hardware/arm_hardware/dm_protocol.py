@@ -118,7 +118,7 @@ class Limits:
 # 공장 기본값 (Seeed DAMIAO 43 시리즈 자료, DM_Control_Python). 실제 값은 레지스터를 읽어 확인한다.
 DEFAULT_LIMITS = {
     "DM-J4310-2EC": Limits(12.5, 30.0, 10.0),
-    "DM-J4340P-2EC": Limits(12.5, 8.0, 28.0),
+    "DM-J4340P-2EC": Limits(12.5, 10.0, 28.0),   # 받은 모터 실측 레지스터 (2026-11-23). Seeed 위키는 VMAX 8
     "DM-H3510": Limits(12.5, 280.0, 1.0),
 }
 

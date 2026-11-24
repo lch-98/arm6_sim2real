@@ -130,9 +130,10 @@ Windows: Damiao 디버깅 어시스턴트(판매처·Damiao 자료실에서 받�
 | 출력 플랜지 위치 핀 | 도면에 없음 | 3 × Ø4 (+0.02~+0.04), 피치원 Ø24.3, M3 구멍 사이 (120° 간격) |
 | 하우징 위치 핀 | 도면에 없음 | 2 × Ø3 (+0.02~+0.04), 깊이 5, 피치원 Ø50, 세로 중심선에서 15°, 서로 마주 봄 |
 | 뒷면 체결 | 4 × M2.5, 깊이 4, 피치원 Ø38 | 4 × M3, 깊이 4, 피치원 Ø38 |
-| 출력 플랜지 (회전부) | 약 Ø38 (도면 축척으로 잰 값, 실측 확인), 하우징 앞면에서 1.5 | Ø35, 하우징 앞면에서 1.0 |
+| 출력 플랜지 (회전부) | Ø37.5 (실측), 하우징 앞면에서 1.5 | Ø35 (실측), 하우징 앞면에서 1.0 |
+| 질량 (실측) | 350 g | 300 g |
 
-- 외경·높이·출력 플랜지는 현재 CAD(`ACT` 값)에 반영했다. 질량은 Seeed 자료값(4340P 약 375 g, 4310 약 300 g)이므로 받으면 저울로 재서 바꾼다
+- 외경·높이·출력 플랜지·질량은 현재 CAD(`ACT` 값)에 반영했다 (2026-11-23 실측)
 - 2단계(체결 설계)에서 이 값으로 볼트 구멍·위치 핀 구멍을 넣는다
 
 ## 4. 측정 항목 (진행하면서 채움)
@@ -196,15 +197,15 @@ sudo ip link set can0 type can bitrate 1000000 && sudo ip link set up can0   # S
 
 | 순서 | 명령 | 확인할 것 |
 |---|---|---|
-| 1 | `dm_bench scan` | 응답하는 모터, 현재 ESC_ID·MST_ID·제어 모드·PMAX/VMAX/TMAX |
+| 1 | `dm_bench scan` | 응답하는 모터, 현재 ESC_ID·MST_ID·제어 모드·PMAX/VMAX/TMAX. 받은 모터는 공장 출고값 ESC 0x01 / MST 0x00, 제어 모드 MIT(1)였음. 감속비 40 = 4340P, 10 = 4310 |
 | 2 | `dm_bench --id <현재> set-id --new-id 0x02 --new-mst 0x12` | 버스에 **한 대만** 연결. 전원을 껐다 켜고 `scan`으로 확인. 바뀌지 않으면 Damiao 디버깅 도구(Windows)로 변경 |
 | 3 | `dm_bench --joint joint2 set-mode --save` | 제어 모드 MIT(1) |
 | 4 | `dm_bench --joint joint2 info` | 변환 범위, 해상도, 온도, 보호 설정 |
 | 5 | `dm_bench --joint joint2 monitor` | 손으로 돌려 위치 부호·단위 확인. 전원을 껐다 켜도 위치가 유지되는지 (절대 위치) |
-| 6 | `dm_bench --joint joint2 zero` | 레버가 수평일 때 영점 저장 |
+| 6 | `dm_bench --joint joint2 zero` | 레버가 수평일 때 영점 저장. 모터는 켤 때 한 바퀴 안의 각도(−π~+π)만 기억하므로, 팔에서는 **관절 0 위치에서 영점**을 잡아 관절 범위가 ±180°를 넘지 않게 한다 ([결과](results/01_motor_bench/README.md)) |
 | 7 | `dm_bench --joint joint2 move --to 0.3 --relative` | 작은 이동부터 |
 | 8 | `dm_bench --joint joint2 hold --seconds 10 --lever <kg>,<m> --approach 0.1` | 토크 보정. 위·아래에서 각각 다가와 유지 → 두 방향 평균 = 부하 토크, 차이의 절반 = 정지 마찰 |
-| 9 | `dm_bench --joint joint2 friction` | 레버 없이, 출력축이 자유롭게 돌 때 |
+| 9 | `dm_bench --joint joint2 friction` | 레버 없이, 출력축이 자유롭게 돌 때. 기본 kd 4340P 3.0 / 4310 1.0 (kd가 작으면 저속에서 정지 마찰을 못 넘음). 못 움직인 속도는 추정에서 빠짐 |
 | 10 | `dm_bench --joint joint2 latency` | 왕복 시간 분포 |
 | 11 | `dm_bench --joint joint2 sweep --ref-joint joint2 --scale 0.3` | 문제없으면 `--scale 1.0` |
 
@@ -214,7 +215,7 @@ sudo ip link set can0 type can bitrate 1000000 && sudo ip link set up can0   # S
 - MIT 위치 제어는 비례 제어라서 **정지 오차 ≈ 부하 토크 ÷ kp**만큼 남는다. 예: 레버 부하 0.49 N·m, kp 8 → 약 60 mrad 처짐 (정지 마찰이 일부를 받으면 더 작음). 오차를 줄이려면 kp를 올리거나, 팔에서는 중력 토크를 피드포워드(tau)로 같이 보낸다
 - `set-id`의 ID 변경·저장 순서는 공개 자료 기준이며 실물에서 처음 확인한다
 
-참고: 프레임 정의는 Damiao 공개 자료와 [DM_Control_Python](https://github.com/cmjang/DM_Control_Python)(MIT License)을 따랐다. 공장 기본 변환 범위(4310: 12.5 / 30 / 10, 4340P: 12.5 / 8 / 28)는 [Seeed 위키](https://wiki.seeedstudio.com/damiao_series/) 기준이며, 도구는 실행할 때 모터 레지스터에서 다시 읽는다.
+참고: 프레임 정의는 Damiao 공개 자료와 [DM_Control_Python](https://github.com/cmjang/DM_Control_Python)(MIT License)을 따랐다. 공장 기본 변환 범위는 받은 모터에서 읽은 값 기준 4310: 12.5 / 30 / 10, 4340P: 12.5 / 10 / 28 이다 ([Seeed 위키](https://wiki.seeedstudio.com/damiao_series/)에는 4340P VMAX 8로 나옴). 도구는 실행할 때마다 모터 레지스터에서 다시 읽는다.
 
 ## 6. ros2_control 하드웨어 인터페이스 (`arm_hardware/DamiaoSystem`)
 

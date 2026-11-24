@@ -50,7 +50,7 @@ struct Limits
 // 공장 기본값 (Seeed DAMIAO 43 시리즈 자료). 실제 값은 활성화 전에 레지스터에서 읽는다.
 inline Limits default_limits(const std::string & model)
 {
-  if (model == "DM-J4340P-2EC") {return {12.5, 8.0, 28.0};}
+  if (model == "DM-J4340P-2EC") {return {12.5, 10.0, 28.0};}  // 받은 모터 레지스터 값 (2026-11-23)
   if (model == "DM-H3510") {return {12.5, 280.0, 1.0};}
   return {12.5, 30.0, 10.0};  // DM-J4310-2EC
 }

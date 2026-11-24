@@ -65,6 +65,11 @@ class DamiaoSerialTransport(Transport):
 
     def __init__(self, port: str = "/dev/ttyACM0", baud: int = 921600):
         import serial  # pyserial
+        if not hasattr(serial, "Serial"):
+            raise RuntimeError(
+                f"'serial' 모듈({getattr(serial, '__file__', '?')})이 pyserial이 아닙니다. "
+                "이름이 같은 다른 패키지 'serial'이 설치되어 있으면 생기는 문제입니다 → "
+                "pip3 uninstall -y serial pyserial && pip3 install --user pyserial")
         self.ser = serial.Serial(port, baud, timeout=0)
         self.buf = bytearray()
 

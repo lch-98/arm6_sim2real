@@ -20,34 +20,34 @@
   <!-- 관성: 프린팅 부품 PLA 1240 kg/m^3 x 실효 충진율 0.5 + 액추에이터 사양표 질량(균일 원기둥 가정). 베어링·볼트·배선 미포함 -->
   <xacro:macro name="inertial_base_link">
     <inertial>
-      <origin xyz="0.000075 0.000000 0.033439" rpy="0 0 0"/>
-      <mass value="0.495271"/>
-      <inertia ixx="3.2856e-04" ixy="-6.3992e-13" ixz="6.3457e-07"
-               iyy="3.2730e-04" iyz="2.0762e-11" izz="3.1841e-04"/>
+      <origin xyz="0.000079 0.000000 0.033225" rpy="0 0 0"/>
+      <mass value="0.470271"/>
+      <inertia ixx="3.1657e-04" ixy="-6.3544e-13" ixz="6.2662e-07"
+               iyy="3.1531e-04" iyz="2.0521e-11" izz="3.0833e-04"/>
     </inertial>
   </xacro:macro>
   <xacro:macro name="inertial_link1">
     <inertial>
-      <origin xyz="0.000000 -0.048398 0.059842" rpy="0 0 0"/>
-      <mass value="0.475849"/>
-      <inertia ixx="7.0211e-04" ixy="-2.7485e-19" ixz="2.1064e-19"
-               iyy="3.8307e-04" iyz="1.8967e-04" izz="5.7629e-04"/>
+      <origin xyz="0.000000 -0.047689 0.059393" rpy="0 0 0"/>
+      <mass value="0.451042"/>
+      <inertia ixx="6.8470e-04" ixy="-2.7654e-19" ixz="2.1589e-19"
+               iyy="3.7133e-04" iyz="1.8691e-04" izz="5.6062e-04"/>
     </inertial>
   </xacro:macro>
   <xacro:macro name="inertial_link2">
     <inertial>
-      <origin xyz="0.000007 -0.039974 0.140586" rpy="0 0 0"/>
-      <mass value="0.517130"/>
-      <inertia ixx="2.4619e-03" ixy="-1.4355e-07" ixz="2.3823e-07"
-               iyy="2.1088e-03" iyz="5.8630e-04" izz="5.6179e-04"/>
+      <origin xyz="0.000007 -0.039300 0.139480" rpy="0 0 0"/>
+      <mass value="0.490957"/>
+      <inertia ixx="2.3933e-03" ixy="-1.4113e-07" ixz="2.3425e-07"
+               iyy="2.0492e-03" iyz="5.6795e-04" izz="5.4187e-04"/>
     </inertial>
   </xacro:macro>
   <xacro:macro name="inertial_link3">
     <inertial>
-      <origin xyz="0.078671 -0.000252 -0.000005" rpy="0 0 0"/>
-      <mass value="0.391168"/>
-      <inertia ixx="1.6714e-04" ixy="-7.7565e-06" ixz="-7.8936e-08"
-               iyy="5.1558e-04" iyz="4.8325e-10" izz="5.1711e-04"/>
+      <origin xyz="0.078869 -0.000245 -0.000005" rpy="0 0 0"/>
+      <mass value="0.390197"/>
+      <inertia ixx="1.6670e-04" ixy="-7.5287e-06" ixz="-7.9317e-08"
+               iyy="5.0887e-04" iyz="4.6904e-10" izz="5.1050e-04"/>
     </inertial>
   </xacro:macro>
   <xacro:macro name="inertial_link4">

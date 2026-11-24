@@ -2,14 +2,14 @@
 # 파일명                                   재질      솔리드 부피[cm^3]
 base_link.stl                              PLA/PETG     187.8
 base_link__base_band.stl                   PLA/PETG       6.2
-link1.stl                                  PLA/PETG     159.3
+link1.stl                                  PLA/PETG     159.6
 link1__j2_bearing_cap.stl                  PLA/PETG       3.4
-link2.stl                                  PLA/PETG     209.3
-link2__j2_adapter.stl                      PLA/PETG      10.8
+link2.stl                                  PLA/PETG     207.7
+link2__j2_adapter.stl                      PLA/PETG      10.5
 link2__j2_pin.stl                          PLA/PETG       7.1
 link2__j3_bearing_cap.stl                  PLA/PETG       2.1
-link3.stl                                  PLA/PETG     131.8
-link3__j3_adapter.stl                      PLA/PETG       8.5
+link3.stl                                  PLA/PETG     130.4
+link3__j3_adapter.stl                      PLA/PETG       8.3
 link3__j3_pin.stl                          PLA/PETG       3.6
 link3__j4_retainer_ring.stl                PLA/PETG       3.1
 link4.stl                                  PLA/PETG     163.4

@@ -65,7 +65,7 @@ def test_cli_friction_estimates(capsys, tmp_path):
     # 가상 모터: fc 0.10, b 0.05
     line = [l for l in out.splitlines() if l.startswith("추정")][0]
     fc = float(line.split("쿨롱 마찰 ")[1].split(" ")[0])
-    bv = float(line.split("점성 마찰 ")[1].split(" ")[0])
+    bv = float(line.split("점성 마찰 ")[1].split(" ")[0].rstrip(","))
     assert abs(fc - 0.10) < 0.03 and abs(bv - 0.05) < 0.02
 
 
@@ -104,3 +104,13 @@ def test_cli_hold_two_directions(capsys, tmp_path):
     fric = float(out.split("정지 마찰 추정 ")[1].split(" ")[0])
     expected = float(out.split("m·g·L·cos(q) = ")[1].split(" ")[0])
     assert abs(avg - expected) < 0.02 and abs(fric - 0.10) < 0.02
+
+
+def test_fit_friction_excludes_stuck():
+    from arm_hardware.bench import fit_friction
+    # 실측 J2(4340P) 평균값: 0.2 rad/s 에서는 못 움직임
+    res = [(0.2, -0.002, 0.184), (-0.2, -0.002, -0.216), (0.5, 0.134, 0.346), (-0.5, -0.154, -0.364),
+           (1.0, 0.533, 0.448), (-1.0, -0.558, -0.463), (2.0, 1.397, 0.587), (-2.0, -1.417, -0.598)]
+    r = fit_friction(res)
+    assert sorted(r["stuck"]) == [-0.2, 0.2]
+    assert abs(r["fc"] - 0.34) < 0.02 and abs(r["b"] - 0.18) < 0.02
