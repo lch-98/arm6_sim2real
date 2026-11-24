@@ -114,3 +114,18 @@ def test_fit_friction_excludes_stuck():
     r = fit_friction(res)
     assert sorted(r["stuck"]) == [-0.2, 0.2]
     assert abs(r["fc"] - 0.34) < 0.02 and abs(r["b"] - 0.18) < 0.02
+
+
+def test_sweep_friction_feedforward_reduces_error(capsys, tmp_path):
+    """가상 모터(fc 0.10, b 0.05)에 같은 값으로 마찰 보상을 넣으면 움직이는 동안 오차가 줄어야 한다"""
+    ref = os.path.join(os.path.dirname(__file__), "..", "..", "arm_bringup", "config", "reference_trajectories.yaml")
+    common = ["--fake", "--joint", "joint4", "--kp", "10", "--kd", "0.3", "--out", str(tmp_path), "sweep",
+              "--ref-joint", "joint4", "--scale", "0.5", "--reference", ref]
+    def moving_rms(out):
+        return float(out.split("움직이는 동안 RMS ")[1].split(" ")[0])
+    bench_main(common)
+    base = moving_rms(capsys.readouterr().out)
+    bench_main(common + ["--ff-friction", "--fc", "0.10", "--fv", "0.05"])
+    out = capsys.readouterr().out
+    assert "마찰 보상 켬" in out
+    assert moving_rms(out) < 0.7 * base

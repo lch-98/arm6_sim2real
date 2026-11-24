@@ -208,6 +208,7 @@ sudo ip link set can0 type can bitrate 1000000 && sudo ip link set up can0   # S
 | 9 | `dm_bench --joint joint2 friction` | 레버 없이, 출력축이 자유롭게 돌 때. 기본 kd 4340P 3.0 / 4310 1.0 (kd가 작으면 저속에서 정지 마찰을 못 넘음). 못 움직인 속도는 추정에서 빠짐 |
 | 10 | `dm_bench --joint joint2 latency` | 왕복 시간 분포 |
 | 11 | `dm_bench --joint joint2 sweep --ref-joint joint2 --scale 0.3` | 문제없으면 `--scale 1.0` |
+| 12 | `dm_bench --joint joint2 sweep --ref-joint joint2 --ff-friction` | 9번에서 잰 마찰(`motors.yaml`의 `fc`, `fv`)만큼 토크를 미리 더함. 11번과 오차 비교 |
 
 - 모든 결과는 `~/arm_bench_logs/`에 CSV로 남는다 (`--out`으로 변경)
 - **안전**: 아래 경우 즉시 모터를 사용 안 함으로 바꾸고 멈춘다 — Ctrl+C, 응답 5번 연속 없음, 모터 오류 상태, 토크·속도가 `motors.yaml`의 한계 초과, 시작 위치에서 1.6 rad 초과 이동, 온도 60 °C 초과. 모터에 브레이크가 없으므로 레버가 떨어져도 안전한 방향으로 둔다
@@ -259,6 +260,7 @@ ros2 run arm_bringup analyze_baseline.py ~/arm_logs/bench_joint2 --compare <Gaze
 ```
 
 1. 5-3절 순서로 ID·모드·영점을 먼저 맞춘다 (`dm_bench`는 `real.launch.py`와 동시에 쓰지 않는다)
+   - 시작할 때 모터 위치가 관절 한계 안에 있어야 한다 (J2 ±1.92 rad). 기준 궤적은 준비 자세(J2 = 0.2 rad)로 3초 동안 먼저 이동하므로, 영점이 멀리 있으면 시작하자마자 크게 돈다. 부하 없는 벤치에서는 지금 위치에서 `zero`로 영점을 잡는다 (팔 조립 때 관절 0 위치에서 다시 잡음)
 2. 처음에는 레버 없이, 그다음 레버+추로 같은 스윕을 돌린다
 3. 관절 + 방향과 모터 + 방향이 반대면 `motors.yaml`의 `direction: -1`
 4. 결과 요약을 `docs/results/01_motor_bench/`에 모은다

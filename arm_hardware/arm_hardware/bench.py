@@ -341,7 +341,7 @@ def cmd_monitor(b: Bench, a):
 
 
 def run_loop(b, m, a, duration, target_fn, writer=None, label=""):
-    """target_fn(t) -> (q_des, dq_des). 반환: 기록 리스트 [(t, q_des, q, dq, tau, T)]"""
+    """target_fn(t) -> (q_des, dq_des) 또는 (q_des, dq_des, tau_ff). 반환: 기록 리스트 [(t, q_des, q, dq, tau, T)]"""
     kp, kd = b.gains(m)
     rate = Rate(a.hz)
     t0 = time.perf_counter()
@@ -350,8 +350,10 @@ def run_loop(b, m, a, duration, target_fn, writer=None, label=""):
         t = time.perf_counter() - t0
         if t > duration:
             break
-        qd, dqd = target_fn(t)
-        fb = b.bus.mit(m, qd, dqd, kp, kd, 0.0)
+        tgt = target_fn(t)
+        qd, dqd = tgt[0], tgt[1]
+        tff = tgt[2] if len(tgt) > 2 else 0.0
+        fb = b.bus.mit(m, qd, dqd, kp, kd, tff)
         if b.check(m, fb):
             row = (t, qd, fb.q, fb.dq, fb.tau, max(fb.t_mos, fb.t_rotor))
             rows.append(row)
@@ -524,6 +526,14 @@ def cmd_latency(b: Bench, a):
         print("  PC 쪽 시간(USB·OS 지연 포함). 버스 위 시간은 `candump -td can0` 로 따로 확인")
 
 
+FF_V0 = 0.05   # 마찰 보상에서 부호를 부드럽게 바꾸는 속도 폭 [rad/s] (방향이 바뀔 때 토크가 뚝 튀지 않게)
+
+
+def friction_ff(dq_des, fc, fv, v0=FF_V0):
+    """목표 속도로 계산한 마찰 보상 토크 = fc·tanh(dq_des / v0) + fv·dq_des  (실제 속도를 쓰지 않으므로 떨림이 생기지 않는다)"""
+    return fc * math.tanh(dq_des / v0) + fv * dq_des
+
+
 def cmd_sweep(b: Bench, a):
     import yaml
     m = b.select()
@@ -532,19 +542,37 @@ def cmd_sweep(b: Bench, a):
     if sw is None:
         sys.exit(f"{a.reference} 에 {a.ref_joint} 스윕이 없습니다")
     A, T, cyc = sw["amplitude"] * a.scale, sw["period"], sw["cycles"]
-    path = out_path(a, f"sweep_{a.ref_joint}", m)
+    fc = fv = 0.0
+    if a.ff_friction:
+        jc = b.cfg["motors"].get(a.joint, {}) if a.joint else {}
+        fc = a.fc if a.fc is not None else float(jc.get("fc", 0.0))
+        fv = a.fv if a.fv is not None else float(jc.get("fv", 0.0))
+        if fc == 0.0 and fv == 0.0:
+            sys.exit("마찰 값이 없습니다: motors.yaml 의 관절에 fc, fv 를 넣거나 --fc --fv 로 주세요")
+    tag = "_ff" if a.ff_friction else ""
+    path = out_path(a, f"sweep_{a.ref_joint}{tag}", m)
     print(f"{a.ref_joint} 스윕: 진폭 {A:.3f} rad, 주기 {T} s × {cyc}, 최고 속도 약 {A * 2 * math.pi / T:.2f} rad/s")
+    if a.ff_friction:
+        print(f"마찰 보상 켬: tau_ff = {fc:g}·tanh(dq_des/{FF_V0:g}) + {fv:g}·dq_des")
+
+    def target(t):
+        dqc, dv = sine_sweep_point(A, T, cyc, t)
+        return qc + dqc, dv, friction_ff(dv, fc, fv) if a.ff_friction else 0.0
+
     with open(path, "w", newline="") as f, b.active(m) as fb0:
         w = csv.writer(f)
         w.writerow(["label", "t", "q_des", "q", "dq", "tau", "temp"])
         qc = fb0.q
-        rows = run_loop(b, m, a, T * cyc + 1.0, lambda t: (qc + sine_sweep_point(A, T, cyc, t)[0],
-                                                           sine_sweep_point(A, T, cyc, t)[1]), w, "sweep")
+        rows = run_loop(b, m, a, T * cyc + 1.0, target, w, "sweep_ff" if a.ff_friction else "sweep")
     if rows:
         err = [(r[1] - r[2]) * 1e3 for r in rows]
         rms = math.sqrt(sum(e * e for e in err) / len(err))
+        moving = [e for r, e in zip(rows, err) if r[0] < T * cyc]
+        rms_m = math.sqrt(sum(e * e for e in moving) / len(moving)) if moving else float("nan")
+        tail = [e for r, e in zip(rows, err) if r[0] > T * cyc + 0.5]
         print(f"추종 오차 RMS {rms:.1f} mrad, 최대 {max(abs(e) for e in err):.1f} mrad "
               f"(Gazebo 기준선 {a.ref_joint}: docs/results/00_sim_baseline/gazebo_summary.md)")
+        print(f"  움직이는 동안 RMS {rms_m:.1f} mrad, 멈춘 뒤 남은 오차 {statistics.mean(tail) if tail else float('nan'):+.1f} mrad")
     print("기록:", path)
 
 
@@ -589,7 +617,10 @@ def build_parser():
     p = sub.add_parser("latency"); p.add_argument("--n", type=int, default=2000)
     p = sub.add_parser("sweep"); p.add_argument("--ref-joint", required=True, help="기준 궤적의 관절 이름"); \
         p.add_argument("--scale", type=float, default=1.0, help="진폭 배율 (처음엔 0.3 정도로)"); \
-        p.add_argument("--reference", default=find_reference_yaml())
+        p.add_argument("--reference", default=find_reference_yaml()); \
+        p.add_argument("--ff-friction", action="store_true", help="측정한 마찰만큼 토크를 미리 더함 (motors.yaml 의 fc, fv)"); \
+        p.add_argument("--fc", type=float, help="쿨롱 마찰 [N·m] (motors.yaml 값 대신)"); \
+        p.add_argument("--fv", type=float, help="점성 마찰 [N·m·s/rad] (motors.yaml 값 대신)")
     return ap
 
 
