@@ -1,0 +1,112 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#fff;font-family:"Noto Sans CJK KR","Noto Sans CJK SC",sans-serif}
+text{font-size:15px;fill:#222}
+.t{font-size:17px;font-weight:700}
+.s{font-size:13px;fill:#555}
+.box{fill:#f4f4f2;stroke:#333;stroke-width:2;rx:8}
+.lev{fill:#e9f2fb;stroke:#2b6cb0;stroke-width:2}
+.red{stroke:#d62828;stroke-width:5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.blk{stroke:#111;stroke-width:5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.thin{stroke:#d62828;stroke-width:3;fill:none;stroke-dasharray:0}
+.org{stroke:#e07b00;stroke-width:3.5;fill:none;stroke-linejoin:round}
+.pin{font-size:15px;font-weight:700}
+</style></head><body>
+<svg width="1500" height="820" viewBox="0 0 1500 820" xmlns="http://www.w3.org/2000/svg">
+<text x="30" y="36" class="t" style="font-size:22px">전원 하네스 배선도 (벤치 파워 → 퓨즈·비상정지·릴레이 → 전원 보드)</text>
+
+<!-- PSU -->
+<rect x="30" y="250" width="170" height="250" class="box"/>
+<text x="55" y="285" class="t">벤치 파워</text>
+<text x="55" y="308" class="s">24.0 V</text>
+<circle cx="200" cy="340" r="11" fill="#d62828"/><text x="150" y="346" class="pin" fill="#d62828">+ 단자</text>
+<circle cx="200" cy="450" r="11" fill="#111"/><text x="150" y="456" class="pin">− 단자</text>
+
+<!-- Y terminals -->
+<g transform="translate(213,340)"><path d="M0,-8 L18,-8 M0,8 L18,8 M18,-10 L30,-10 L30,10 L18,10" stroke="#c9a400" stroke-width="5" fill="none"/></g>
+<g transform="translate(213,450)"><path d="M0,-8 L18,-8 M0,8 L18,8 M18,-10 L30,-10 L30,10 L18,10" stroke="#c9a400" stroke-width="5" fill="none"/></g>
+<text x="205" y="398" class="s">Y단자 = 벤치 파워 단자에만</text>
+
+<!-- RED: Y -> 2구 lever -->
+<path d="M243,340 L330,340" class="red"/>
+<text x="236" y="372" class="s">① 빨강 약 30 cm</text>
+<rect x="330" y="322" width="56" height="36" class="lev" rx="6"/><text x="338" y="345" class="s" style="fill:#2b6cb0">2구</text>
+<text x="300" y="290" class="s" style="fill:#2b6cb0">①의 끝 + 퓨즈 홀더 선을</text>
+<text x="300" y="306" class="s" style="fill:#2b6cb0">함께 꽂아 잇기 (납땜도 OK)</text>
+
+<!-- fuse -->
+<path d="M386,340 L440,340" class="red"/>
+<rect x="440" y="322" width="90" height="36" class="box"/><text x="452" y="346">퓨즈 5A</text>
+<path d="M530,340 L600,340" class="red"/>
+<text x="440" y="378" class="s">퓨즈 홀더 (자체 선 2가닥)</text>
+
+<!-- 3구 #1 -->
+<rect x="600" y="316" width="64" height="48" class="lev" rx="6"/><text x="608" y="345" class="s" style="fill:#2b6cb0">3구 ①</text>
+
+<!-- E-stop -->
+<rect x="560" y="70" width="270" height="110" class="box"/>
+<text x="580" y="100" class="t">비상정지 박스</text>
+<text x="580" y="122" class="s">b접점 나사 2개 (평소 연결, 누르면 끊김)</text>
+<circle cx="600" cy="160" r="8" fill="#e07b00"/><text x="612" y="166" class="pin" fill="#e07b00">E1</text>
+<circle cx="790" cy="160" r="8" fill="#e07b00"/><text x="802" y="166" class="pin" fill="#e07b00">E2</text>
+<path d="M632,316 L632,230 L600,230 L600,168" class="org"/>
+<text x="640" y="262" class="s" style="fill:#e07b00">E1 → 3구 ①</text>
+
+<!-- relay -->
+<rect x="900" y="270" width="200" height="300" class="box"/>
+<text x="955" y="300" class="t">릴레이</text>
+<!-- pins -->
+<circle cx="900" cy="340" r="7" fill="#333"/><text x="912" y="346" class="pin">30</text>
+<circle cx="1100" cy="340" r="7" fill="#333"/><text x="1062" y="346" class="pin">87</text>
+<circle cx="900" cy="395" r="7" fill="#999"/><text x="912" y="401" class="pin" fill="#999">87a</text>
+<circle cx="900" cy="460" r="7" fill="#333"/><text x="912" y="466" class="pin">86</text>
+<circle cx="900" cy="530" r="7" fill="#333"/><text x="912" y="536" class="pin">85</text>
+<text x="960" y="402" class="s">87a: 안 씀</text><text x="960" y="418" class="s">(끝을 수축튜브로 막기)</text>
+<path d="M900,395 L870,395" stroke="#999" stroke-width="4"/><rect x="852" y="387" width="18" height="16" fill="#999"/>
+<!-- 30 -->
+<path d="M664,340 L900,340" class="red"/>
+<text x="672" y="330" class="s">→ 30번 선</text>
+
+<!-- E2 -> 86 -->
+<path d="M790,168 L790,328 A12,12 0 0 1 790,352 L790,460 L900,460" class="org"/>
+<text x="712" y="380" class="s">교차만 함</text><text x="712" y="396" class="s">(연결 아님)</text>
+<text x="702" y="452" class="s" style="fill:#e07b00">E2 → 86번 선</text>
+
+<!-- diode across 86-85 at x=850 -->
+<path d="M850,460 L850,478" stroke="#333" stroke-width="3"/>
+<path d="M850,512 L850,530" stroke="#333" stroke-width="3"/>
+<polygon points="838,512 862,512 850,488" fill="#333"/>
+<rect x="836" y="481" width="28" height="6" fill="#bbb"/>
+<circle cx="850" cy="460" r="5" fill="#333"/><circle cx="850" cy="530" r="5" fill="#333"/>
+<text x="1108" y="470" class="s">다이오드 1개 (이미 납땜한 것)</text>
+<text x="1108" y="488" class="s">86 ─ 띠(은색) ─ 다이오드 ─ 85</text>
+<path d="M1106,474 L866,486" stroke="#999" stroke-width="1.5" stroke-dasharray="5,4"/>
+
+<!-- 87 -> output + -->
+<path d="M1100,340 L1250,340" class="red"/>
+<text x="1112" y="328" class="s">② 빨강 약 50 cm</text>
+<rect x="1250" y="322" width="56" height="36" class="lev" rx="6"/><text x="1258" y="345" class="s" style="fill:#2b6cb0">2구</text>
+<path d="M1306,340 L1340,340" class="red"/>
+<rect x="1340" y="300" width="140" height="300" class="box"/>
+<text x="1355" y="330" class="t">전원 보드</text>
+<text x="1355" y="360" class="s" style="fill:#d62828">굵은 빨강 (+)</text>
+<text x="1355" y="585" class="s">굵은 검정 (−)</text>
+
+<!-- BLACK -->
+<path d="M243,450 L300,450 L300,700 L600,700" class="blk"/>
+<text x="310" y="690" class="s">③ 검정 약 30 cm</text>
+<rect x="600" y="676" width="64" height="48" class="lev" rx="6"/><text x="608" y="705" class="s" style="fill:#2b6cb0">3구 ②</text>
+<path d="M664,700 L820,700 L820,530 L900,530" class="blk"/>
+<text x="830" y="610" class="s">85번 쪽 검정 선</text><text x="830" y="626" class="s">(85 연결부에 새로 납땜)</text>
+<path d="M664,700 L1250,700" class="blk"/>
+<text x="1000" y="690" class="s">④ 검정 약 50 cm</text>
+<rect x="1250" y="682" width="56" height="36" class="lev" rx="6"/><text x="1258" y="705" class="s" style="fill:#2b6cb0">2구</text>
+<path d="M1306,700 L1360,700 L1360,600" class="blk"/>
+
+<!-- legend -->
+<rect x="30" y="745" width="1450" height="62" fill="#fafafa" stroke="#ddd"/>
+<rect x="45" y="760" width="40" height="22" class="lev" rx="5"/><text x="95" y="777">레버 커넥터 = 선끼리 잇는 곳 (선 끝 피복 10 mm 벗겨 꽂기, 납땜해도 같음)</text>
+<path d="M720,771 L770,771" class="red"/><text x="780" y="777">빨강 18 AWG</text>
+<path d="M900,771 L950,771" class="blk"/><text x="960" y="777">검정 18 AWG</text>
+<path d="M1080,771 L1130,771" class="org"/><text x="1140" y="777">비상정지 선 (각 약 1 m)</text>
+<text x="95" y="799" class="s">각 선은 양 끝이 있음: ①③은 한쪽 Y단자(벤치 파워), 반대쪽 레버 커넥터 / ②④는 한쪽 릴레이·3구, 반대쪽 전원 보드 쪽 2구</text>
+</svg></body></html>
